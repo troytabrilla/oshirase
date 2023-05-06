@@ -288,3 +288,15 @@ pub async fn aggregate() -> Result<MediaLists, Box<dyn Error>> {
 
     Ok(MediaLists { anime, manga })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_aggregate() {
+        let lists = aggregate().await.unwrap();
+        assert!(!lists.anime.is_empty());
+        assert!(!lists.manga.is_empty());
+    }
+}
