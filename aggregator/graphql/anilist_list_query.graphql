@@ -1,0 +1,54 @@
+query AniListListQuery($userId: Int, $status: String) {
+    anime: MediaListCollection(userId: $userId, type: ANIME, status: $status) {
+        lists {
+            name
+            status
+            entries {
+                media {
+                    id
+                    type
+                    format
+                    season
+                    seasonYear
+                    title {
+                        romaji
+                        english
+                    }
+                    coverImage {
+                        large
+                    }
+                    episodes
+                }
+                status
+                score
+                progress
+            }
+        }
+    }
+    manga: MediaListCollection(userId: $userId, type: MANGA, status: $status) {
+        lists {
+            name
+            status
+            entries {
+                media {
+                    id
+                    type
+                    format
+                    season
+                    seasonYear
+                    title {
+                        romaji
+                        english
+                    }
+                    coverImage {
+                        large
+                    }
+                    episodes
+                }
+                status
+                score
+                progress
+            }
+        }
+    }
+}

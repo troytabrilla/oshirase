@@ -1,7 +1,8 @@
 use aggregator::sources::AniListAPI;
+// use aggregator::sources::Source;
 
 #[tokio::main]
 async fn main() {
-    let lists = AniListAPI::aggregate().await.unwrap();
-    println!("{:#?}", lists);
+    let api = AniListAPI::from("config/anilist_api.yaml");
+    println!("{:#?}", api);
 }
