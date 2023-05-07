@@ -37,26 +37,27 @@ pub struct User {
     name: String,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct Media {
-    media_id: Option<u64>,
-    media_type: Option<String>,
-    status: Option<String>,
-    format: Option<String>,
-    season: Option<String>,
-    season_year: Option<u64>,
-    title: Option<String>,
-    alt_title: Option<String>,
-    image: Option<String>,
-    episodes: Option<u64>,
-    score: Option<u64>,
-    progress: Option<u64>,
+    pub media_id: Option<u64>,
+    pub media_type: Option<String>,
+    pub status: Option<String>,
+    pub format: Option<String>,
+    pub season: Option<String>,
+    pub season_year: Option<u64>,
+    pub title: Option<String>,
+    pub alt_title: Option<String>,
+    pub image: Option<String>,
+    pub episodes: Option<u64>,
+    pub score: Option<u64>,
+    pub progress: Option<u64>,
+    pub latest: Option<u64>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct MediaLists {
-    anime: Vec<Media>,
-    manga: Vec<Media>,
+    pub anime: Vec<Media>,
+    pub manga: Vec<Media>,
 }
 
 #[derive(GraphQLQuery)]
@@ -72,8 +73,6 @@ struct AniListUserQuery;
     query_path = "graphql/anilist/list_query.graphql"
 )]
 struct AniListListQuery;
-
-type MediaListStatus = ani_list_list_query::MediaListStatus;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
@@ -145,37 +144,47 @@ impl AniListAPI {
     fn transform(&self, json: Option<&Vec<Json>>) -> Result<Vec<Media>, Box<dyn Error>> {
         match json {
             Some(json) => {
-                let list: Vec<Media> = json
-                    .iter()
-                    .map(|entry| Media {
-                        media_id: Self::extract_value(entry, "/media/id").as_u64(),
-                        media_type: Self::extract_value(entry, "/media/type")
-                            .as_str()
-                            .map(ToOwned::to_owned),
-                        status: Self::extract_value(entry, "/media/status")
-                            .as_str()
-                            .map(ToOwned::to_owned),
-                        format: Self::extract_value(entry, "/media/format")
-                            .as_str()
-                            .map(ToOwned::to_owned),
-                        season: Self::extract_value(entry, "/media/season")
-                            .as_str()
-                            .map(ToOwned::to_owned),
-                        season_year: Self::extract_value(entry, "/media/seasonYear").as_u64(),
-                        title: Self::extract_value(entry, "/media/title/romaji")
-                            .as_str()
-                            .map(ToOwned::to_owned),
-                        alt_title: Self::extract_value(entry, "/media/title/english")
-                            .as_str()
-                            .map(ToOwned::to_owned),
-                        image: Self::extract_value(entry, "/media/coverImage/large")
-                            .as_str()
-                            .map(ToOwned::to_owned),
-                        episodes: Self::extract_value(entry, "/media/episodes").as_u64(),
-                        score: Self::extract_value(entry, "/score").as_u64(),
-                        progress: Self::extract_value(entry, "/progress").as_u64(),
-                    })
-                    .collect();
+                let list: Vec<Media> =
+                    json.iter().fold(Vec::new() as Vec<Media>, |mut acc, list| {
+                        if let Some(entries) = Self::extract_value(list, "/entries").as_array() {
+                            for entry in entries {
+                                let media = Media {
+                                    media_id: Self::extract_value(entry, "/media/id").as_u64(),
+                                    media_type: Self::extract_value(entry, "/media/type")
+                                        .as_str()
+                                        .map(ToOwned::to_owned),
+                                    status: Self::extract_value(entry, "/status")
+                                        .as_str()
+                                        .map(ToOwned::to_owned),
+                                    format: Self::extract_value(entry, "/media/format")
+                                        .as_str()
+                                        .map(ToOwned::to_owned),
+                                    season: Self::extract_value(entry, "/media/season")
+                                        .as_str()
+                                        .map(ToOwned::to_owned),
+                                    season_year: Self::extract_value(entry, "/media/seasonYear")
+                                        .as_u64(),
+                                    title: Self::extract_value(entry, "/media/title/romaji")
+                                        .as_str()
+                                        .map(ToOwned::to_owned),
+                                    alt_title: Self::extract_value(entry, "/media/title/english")
+                                        .as_str()
+                                        .map(ToOwned::to_owned),
+                                    image: Self::extract_value(entry, "/media/coverImage/large")
+                                        .as_str()
+                                        .map(ToOwned::to_owned),
+                                    episodes: Self::extract_value(entry, "/media/episodes")
+                                        .as_u64(),
+                                    score: Self::extract_value(entry, "/score").as_u64(),
+                                    progress: Self::extract_value(entry, "/progress").as_u64(),
+                                    latest: None,
+                                };
+                                acc.push(media);
+                            }
+                        }
+
+                        acc
+                    });
 
                 Ok(list)
             }
@@ -185,26 +194,18 @@ impl AniListAPI {
         }
     }
 
-    pub async fn fetch_lists(
-        &self,
-        user_id: u64,
-        status: Option<MediaListStatus>,
-    ) -> Result<MediaLists, Box<dyn Error>> {
+    pub async fn fetch_lists(&self, user_id: u64) -> Result<MediaLists, Box<dyn Error>> {
         let variables = ani_list_list_query::Variables {
             user_id: Some(user_id as i64),
-            status: match status {
-                Some(status) => Some(status),
-                None => Some(MediaListStatus::CURRENT),
-            },
         };
         let body = AniListListQuery::build_query(variables);
 
         let json = self.fetch(&body).await?;
 
-        let anime = Self::extract_value(&json, "/data/anime/lists/0/entries").as_array();
+        let anime = Self::extract_value(&json, "/data/anime/lists").as_array();
         let anime = self.transform(anime)?;
 
-        let manga = Self::extract_value(&json, "/data/manga/lists/0/entries").as_array();
+        let manga = Self::extract_value(&json, "/data/manga/lists").as_array();
         let manga = self.transform(manga)?;
 
         Ok(MediaLists { anime, manga })
@@ -213,13 +214,13 @@ impl AniListAPI {
 
 #[async_trait]
 impl Source for AniListAPI {
-    // @todo implement this properly
-    // @todo save to mongodb
-    // @todo set up docker
-    async fn aggregate(&self) -> Result<(), Box<dyn Error>> {
-        Err(Box::new(AniListError {
-            message: "No lists available.".to_owned(),
-        }))
+    type Data = MediaLists;
+
+    async fn aggregate(&self) -> Result<MediaLists, Box<dyn Error>> {
+        let user = self.fetch_user().await.unwrap();
+        let lists = self.fetch_lists(user.id).await.unwrap();
+
+        Ok(lists)
     }
 }
 
@@ -260,7 +261,7 @@ mod tests {
     async fn test_fetch_lists() {
         let api = AniListAPI::from("config/anilist_api.yaml");
         let user = api.fetch_user().await.unwrap();
-        let actual = api.fetch_lists(user.id, None).await.unwrap();
+        let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }
@@ -268,7 +269,8 @@ mod tests {
     #[tokio::test]
     async fn test_aggregate() {
         let api = AniListAPI::from("config/anilist_api.yaml");
-        api.aggregate().await.unwrap();
-        panic!("Check DB.");
+        let actual = api.aggregate().await.unwrap();
+        assert!(!actual.anime.is_empty());
+        assert!(!actual.manga.is_empty());
     }
 }

@@ -1,8 +1,9 @@
-use aggregator::sources::AniListAPI;
-// use aggregator::sources::Source;
+use aggregator::Aggregator;
+use std::error::Error;
 
 #[tokio::main]
-async fn main() {
-    let api = AniListAPI::from("config/anilist_api.yaml");
-    println!("{:#?}", api);
+async fn main() -> Result<(), Box<dyn Error>> {
+    Aggregator::default().aggregate().await?;
+
+    Ok(())
 }

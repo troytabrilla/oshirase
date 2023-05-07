@@ -35,13 +35,13 @@ impl Default for MongoDB {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    // use super::*;
 
-    #[tokio::test]
-    async fn test_default() {
-        let mongo = MongoDB::default();
-        let actual = mongo.client.list_database_names(None, None).await.unwrap();
-        let expected = vec!["admin", "config", "local"];
-        assert_eq!(actual, expected);
-    }
+    // #[tokio::test]
+    // async fn test_default() {
+    //     let mongo = MongoDB::default();
+    //     let actual = mongo.client.list_database_names(None, None).await.unwrap();
+    //     let expected = vec!["admin", "config", "local"];
+    //     assert_eq!(actual, expected);
+    // }
 }

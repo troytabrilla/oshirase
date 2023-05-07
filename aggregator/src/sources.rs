@@ -5,7 +5,13 @@ pub mod anilist_api;
 
 pub use anilist_api::AniListAPI;
 
+pub enum Sources {
+    AniListAPI(AniListAPI),
+}
+
 #[async_trait]
 pub trait Source {
-    async fn aggregate(&self) -> Result<(), Box<dyn Error>>;
+    type Data;
+
+    async fn aggregate(&self) -> Result<Self::Data, Box<dyn Error>>;
 }
