@@ -1,5 +1,5 @@
-query AniListListQuery($userId: Int, $status: String) {
-    anime: MediaListCollection(userId: $userId, type: ANIME, status: $status) {
+query AniListListQuery($user_id: Int, $status: MediaListStatus) {
+    anime: MediaListCollection(userId: $user_id, type: ANIME, status: $status) {
         lists {
             name
             status
@@ -25,7 +25,7 @@ query AniListListQuery($userId: Int, $status: String) {
             }
         }
     }
-    manga: MediaListCollection(userId: $userId, type: MANGA, status: $status) {
+    manga: MediaListCollection(userId: $user_id, type: MANGA, status: $status) {
         lists {
             name
             status

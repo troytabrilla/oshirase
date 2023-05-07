@@ -9,6 +9,7 @@ use serde_json;
 use std::{error::Error, fmt};
 
 type Json = serde_json::Value;
+type Object = serde_json::Map<String, Json>;
 
 #[derive(Debug)]
 struct AniListError {
@@ -72,6 +73,8 @@ pub struct AniListUserQuery;
     query_path = "graphql/anilist/list_query.graphql"
 )]
 pub struct AniListListQuery;
+
+type MediaListStatus = ani_list_list_query::MediaListStatus;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
@@ -140,22 +143,40 @@ impl AniListAPI {
         })
     }
 
-    fn transform(&self, json: &Json) -> Result<Vec<Media>, Box<dyn Error>> {
-        Err(Box::new(AniListError {
-            message: "Could not transform response.".to_owned(),
-        }))
+    fn transform(&self, json: Option<&Object>) -> Result<Vec<Media>, Box<dyn Error>> {
+        match json {
+            Some(json) => Err(Box::new(AniListError {
+                message: "Could not transform response.".to_owned(),
+            })),
+            None => Err(Box::new(AniListError {
+                message: "No response to transform.".to_owned(),
+            })),
+        }
     }
 
-    // @todo Use graphql_client
     pub async fn fetch_lists(
         &self,
         user_id: u64,
-        status: Option<&str>,
+        status: Option<MediaListStatus>,
     ) -> Result<MediaLists, Box<dyn Error>> {
-        let client = reqwest::Client::new();
-        Err(Box::new(AniListError {
-            message: "No lists found.".to_owned(),
-        }))
+        let variables = ani_list_list_query::Variables {
+            user_id: Some(user_id as i64),
+            status: match status {
+                Some(status) => Some(status),
+                None => Some(MediaListStatus::CURRENT),
+            },
+        };
+        let body = AniListListQuery::build_query(variables);
+
+        let json = self.fetch(&body).await?;
+
+        let anime = Self::extract_value(&json, "/data/anime").as_object();
+        let anime = self.transform(anime)?;
+
+        let manga = Self::extract_value(&json, "/data/manga").as_object();
+        let manga = self.transform(manga)?;
+
+        Ok(MediaLists { anime, manga })
     }
 }
 
@@ -165,7 +186,6 @@ impl Source for AniListAPI {
     // @todo save to mongodb
     // @todo set up docker
     async fn aggregate(&self) -> Result<(), Box<dyn Error>> {
-        println!("{:#?}", self.config);
         Err(Box::new(AniListError {
             message: "No lists available.".to_owned(),
         }))

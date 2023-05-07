@@ -26,7 +26,7 @@ impl Default for MongoDB {
         let hosts = vec![address];
         let options = ClientOptions::builder()
             .hosts(hosts)
-            .app_name(String::from("oshirase-aggregator"))
+            .app_name("oshirase-aggregator".to_owned())
             .build();
         let client = Client::with_options(options).expect("Could not create mongodb client.");
         MongoDB { client }
