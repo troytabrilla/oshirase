@@ -7,7 +7,5 @@ pub use anilist_api::AniListAPI;
 
 #[async_trait]
 pub trait Source {
-    type Data;
-
-    async fn aggregate(&self) -> Result<Self::Data, Box<dyn Error>>;
+    async fn aggregate(&self) -> Result<(), Box<dyn Error>>;
 }

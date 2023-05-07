@@ -16,9 +16,9 @@ struct AniListError {
 }
 
 impl AniListError {
-    fn from(message: &str) -> Box<AniListError> {
+    fn boxed(message: &str) -> Box<AniListError> {
         Box::new(AniListError {
-            message: String::from(message),
+            message: message.to_owned(),
         })
     }
 }
@@ -61,21 +61,31 @@ pub struct MediaLists {
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/anilist_schema.json",
-    query_path = "graphql/anilist_user_query.graphql"
+    schema_path = "graphql/anilist/schema.json",
+    query_path = "graphql/anilist/user_query.graphql"
 )]
 pub struct AniListUserQuery;
 
 #[derive(GraphQLQuery)]
 #[graphql(
-    schema_path = "graphql/anilist_schema.json",
-    query_path = "graphql/anilist_list_query.graphql"
+    schema_path = "graphql/anilist/schema.json",
+    query_path = "graphql/anilist/list_query.graphql"
 )]
 pub struct AniListListQuery;
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Config {
+    url: String,
+    access_token: String,
+}
 
 #[derive(Debug)]
 pub struct AniListAPI {
     config: Config,
+}
+
+impl Conf for AniListAPI {
+    type Config = Config;
 }
 
 impl AniListAPI {
@@ -84,21 +94,24 @@ impl AniListAPI {
     }
 
     pub fn from(filename: &str) -> AniListAPI {
-        let config = Self::get_config(filename).expect("Could not load config.");
+        let config = Self::get_config(filename).expect("Could not load anilist_api config.");
         Self::new(config)
     }
 
-    pub async fn fetch_user(&self, access_token: Option<&str>) -> Result<User, Box<dyn Error>> {
-        let variables = ani_list_user_query::Variables {};
-        let body = AniListUserQuery::build_query(variables);
-        let access_token = access_token.unwrap_or(&self.config.access_token);
-        let client = reqwest::Client::new();
+    fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
+        json.pointer(key).unwrap_or(&Json::Null)
+    }
 
+    async fn fetch<T>(&self, body: &T) -> Result<Json, Box<dyn Error>>
+    where
+        T: Serialize,
+    {
+        let client = reqwest::Client::new();
         let json = client
             .post(self.config.url.as_str())
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", access_token),
+                format!("Bearer {}", self.config.access_token),
             )
             .json(&body)
             .send()
@@ -106,29 +119,30 @@ impl AniListAPI {
             .json::<Json>()
             .await?;
 
-        let err = AniListError::from("Could not fetch user.");
+        Ok(json)
+    }
+
+    pub async fn fetch_user(&self) -> Result<User, Box<dyn Error>> {
+        let variables = ani_list_user_query::Variables {};
+        let body = AniListUserQuery::build_query(variables);
+
+        let json = self.fetch(&body).await?;
 
         Ok(User {
-            id: match json.pointer("/data/Viewer/id") {
-                Some(id) => match id.as_u64() {
-                    Some(id) => id,
-                    None => return Err(err),
-                },
-                None => return Err(err),
+            id: match Self::extract_value(&json, "/data/Viewer/id").as_u64() {
+                Some(id) => id,
+                None => return Err(AniListError::boxed("Could not find user ID.")),
             },
-            name: match json.pointer("/data/Viewer/name") {
-                Some(name) => match name.as_str() {
-                    Some(name) => String::from(name),
-                    None => return Err(err),
-                },
-                None => return Err(err),
+            name: match Self::extract_value(&json, "/data/Viewer/name").as_str() {
+                Some(name) => name.to_owned(),
+                None => return Err(AniListError::boxed("Could not find user name.")),
             },
         })
     }
 
     fn transform(&self, json: &Json) -> Result<Vec<Media>, Box<dyn Error>> {
         Err(Box::new(AniListError {
-            message: String::from("Could not transform response."),
+            message: "Could not transform response.".to_owned(),
         }))
     }
 
@@ -140,32 +154,22 @@ impl AniListAPI {
     ) -> Result<MediaLists, Box<dyn Error>> {
         let client = reqwest::Client::new();
         Err(Box::new(AniListError {
-            message: String::from("No lists found."),
+            message: "No lists found.".to_owned(),
         }))
     }
 }
 
 #[async_trait]
 impl Source for AniListAPI {
-    type Data = MediaLists;
-
     // @todo implement this properly
-    async fn aggregate(&self) -> Result<MediaLists, Box<dyn Error>> {
+    // @todo save to mongodb
+    // @todo set up docker
+    async fn aggregate(&self) -> Result<(), Box<dyn Error>> {
         println!("{:#?}", self.config);
         Err(Box::new(AniListError {
-            message: String::from("No lists available."),
+            message: "No lists available.".to_owned(),
         }))
     }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Config {
-    url: String,
-    access_token: String,
-}
-
-impl Conf for AniListAPI {
-    type Config = Config;
 }
 
 #[cfg(test)]
@@ -175,8 +179,8 @@ mod tests {
     #[test]
     fn test_new() {
         let api = AniListAPI::new(Config {
-            url: String::from("url"),
-            access_token: String::from("access_token"),
+            url: "url".to_owned(),
+            access_token: "access_token".to_owned(),
         });
         assert_eq!(api.config.url, "url");
         assert_eq!(api.config.access_token, "access_token");
@@ -197,14 +201,14 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_user() {
         let api = AniListAPI::from("config/anilist_api.yaml");
-        let actual = api.fetch_user(None).await.unwrap();
+        let actual = api.fetch_user().await.unwrap();
         assert_eq!(actual.name, "***REMOVED***");
     }
 
     #[tokio::test]
     async fn test_fetch_lists() {
         let api = AniListAPI::from("config/anilist_api.yaml");
-        let user = api.fetch_user(None).await.unwrap();
+        let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id, None).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
@@ -213,8 +217,7 @@ mod tests {
     #[tokio::test]
     async fn test_aggregate() {
         let api = AniListAPI::from("config/anilist_api.yaml");
-        let actual = api.aggregate().await.unwrap();
-        assert!(!actual.anime.is_empty());
-        assert!(!actual.manga.is_empty());
+        api.aggregate().await.unwrap();
+        panic!("Check DB.");
     }
 }
