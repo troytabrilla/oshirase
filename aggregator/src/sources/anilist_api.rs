@@ -32,7 +32,13 @@ impl fmt::Display for AniListError {
 impl Error for AniListError {}
 
 #[derive(Debug, PartialEq)]
-struct Media {
+pub struct User {
+    id: u64,
+    name: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Media {
     media_id: Option<u64>,
     media_type: Option<String>,
     status: Option<String>,
@@ -48,12 +54,6 @@ struct Media {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct User {
-    id: u64,
-    name: String,
-}
-
-#[derive(Debug, PartialEq)]
 pub struct MediaLists {
     anime: Vec<Media>,
     manga: Vec<Media>,
@@ -64,14 +64,14 @@ pub struct MediaLists {
     schema_path = "graphql/anilist/schema.json",
     query_path = "graphql/anilist/user_query.graphql"
 )]
-pub struct AniListUserQuery;
+struct AniListUserQuery;
 
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/anilist/schema.json",
     query_path = "graphql/anilist/list_query.graphql"
 )]
-pub struct AniListListQuery;
+struct AniListListQuery;
 
 type MediaListStatus = ani_list_list_query::MediaListStatus;
 
