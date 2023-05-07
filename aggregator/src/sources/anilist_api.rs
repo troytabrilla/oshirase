@@ -9,7 +9,6 @@ use serde_json;
 use std::{error::Error, fmt};
 
 type Json = serde_json::Value;
-type Object = serde_json::Map<String, Json>;
 
 #[derive(Debug)]
 struct AniListError {
@@ -143,11 +142,43 @@ impl AniListAPI {
         })
     }
 
-    fn transform(&self, json: Option<&Object>) -> Result<Vec<Media>, Box<dyn Error>> {
+    fn transform(&self, json: Option<&Vec<Json>>) -> Result<Vec<Media>, Box<dyn Error>> {
         match json {
-            Some(json) => Err(Box::new(AniListError {
-                message: "Could not transform response.".to_owned(),
-            })),
+            Some(json) => {
+                let list: Vec<Media> = json
+                    .iter()
+                    .map(|entry| Media {
+                        media_id: Self::extract_value(entry, "/media/id").as_u64(),
+                        media_type: Self::extract_value(entry, "/media/type")
+                            .as_str()
+                            .map(ToOwned::to_owned),
+                        status: Self::extract_value(entry, "/media/status")
+                            .as_str()
+                            .map(ToOwned::to_owned),
+                        format: Self::extract_value(entry, "/media/format")
+                            .as_str()
+                            .map(ToOwned::to_owned),
+                        season: Self::extract_value(entry, "/media/season")
+                            .as_str()
+                            .map(ToOwned::to_owned),
+                        season_year: Self::extract_value(entry, "/media/seasonYear").as_u64(),
+                        title: Self::extract_value(entry, "/media/title/romaji")
+                            .as_str()
+                            .map(ToOwned::to_owned),
+                        alt_title: Self::extract_value(entry, "/media/title/english")
+                            .as_str()
+                            .map(ToOwned::to_owned),
+                        image: Self::extract_value(entry, "/media/coverImage/large")
+                            .as_str()
+                            .map(ToOwned::to_owned),
+                        episodes: Self::extract_value(entry, "/media/episodes").as_u64(),
+                        score: Self::extract_value(entry, "/score").as_u64(),
+                        progress: Self::extract_value(entry, "/progress").as_u64(),
+                    })
+                    .collect();
+
+                Ok(list)
+            }
             None => Err(Box::new(AniListError {
                 message: "No response to transform.".to_owned(),
             })),
@@ -170,10 +201,10 @@ impl AniListAPI {
 
         let json = self.fetch(&body).await?;
 
-        let anime = Self::extract_value(&json, "/data/anime").as_object();
+        let anime = Self::extract_value(&json, "/data/anime/lists/0/entries").as_array();
         let anime = self.transform(anime)?;
 
-        let manga = Self::extract_value(&json, "/data/manga").as_object();
+        let manga = Self::extract_value(&json, "/data/manga/lists/0/entries").as_array();
         let manga = self.transform(manga)?;
 
         Ok(MediaLists { anime, manga })
