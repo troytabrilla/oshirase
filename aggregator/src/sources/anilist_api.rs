@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::db;
 use crate::sources::Source;
 
 use async_trait::async_trait;
@@ -37,7 +38,7 @@ pub struct User {
     name: String,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct Media {
     pub media_id: Option<u64>,
     pub media_type: Option<String>,
@@ -54,7 +55,7 @@ pub struct Media {
     pub latest: Option<u64>,
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct MediaLists {
     pub anime: Vec<Media>,
     pub manga: Vec<Media>,
@@ -194,7 +195,9 @@ impl AniListAPI {
         let manga = Self::extract_value(&json, "/data/manga/lists").as_array();
         let manga = self.transform(manga)?;
 
-        Ok(MediaLists { anime, manga })
+        let lists = MediaLists { anime, manga };
+
+        Ok(lists)
     }
 }
 
@@ -210,10 +213,66 @@ impl Source for AniListAPI {
     type Data = MediaLists;
 
     async fn extract(&self) -> Result<MediaLists, Box<dyn Error>> {
-        let user = self.fetch_user().await.unwrap();
-        let lists = self.fetch_lists(user.id).await.unwrap();
+        let user = self.fetch_user().await?;
+
+        let cached = self.check_cache(&user).await;
+        if !cached.is_empty() {
+            match serde_json::from_str::<MediaLists>(cached.as_str()) {
+                Ok(lists) => {
+                    return Ok(lists);
+                }
+                Err(err) => {
+                    println!("Could not parse cached response: {}", err);
+                }
+            }
+        }
+
+        let lists = self.fetch_lists(user.id).await?;
+
+        let serialized = serde_json::to_string(&lists);
+        match serialized {
+            Ok(serialized) => {
+                self.cache_value(&user, serialized).await;
+            }
+            Err(err) => {
+                println!("Could not stringify results: {}.", err);
+            }
+        }
 
         Ok(lists)
+    }
+}
+
+impl AniListAPI {
+    fn get_cache_key(user_id: u64) -> String {
+        format!("anilist_api:fetch_lists:{}", user_id)
+    }
+
+    async fn check_cache(&self, user: &User) -> String {
+        let cache_key = Self::get_cache_key(user.id);
+        let cache_key = cache_key.as_str();
+
+        let mut redis = db::Redis::default();
+
+        let cached: Result<String, Box<dyn Error>> = redis.get::<String>(cache_key).await;
+        match cached {
+            Ok(cached) => cached,
+            Err(err) => {
+                println!("No cached value for key {}: {}", cache_key, err);
+                String::new()
+            }
+        }
+    }
+
+    async fn cache_value(&self, user: &User, value: String) {
+        let cache_key = Self::get_cache_key(user.id);
+        let cache_key = cache_key.as_str();
+
+        let mut redis = db::Redis::default();
+
+        if let Err(err) = redis.set::<String>(cache_key, &value).await {
+            println!("Could not cache value for key {}: {}", cache_key, err);
+        }
     }
 }
 
@@ -235,11 +294,15 @@ mod tests {
                 mongodb: MongoDBConfig {
                     host: "host".to_owned(),
                 },
+                redis: RedisConfig {
+                    host: "host".to_owned(),
+                },
             },
         });
         assert_eq!(api.config.anilist_api.url, "url");
         assert_eq!(api.config.anilist_api.auth.access_token, "access_token");
         assert_eq!(api.config.db.mongodb.host, "host");
+        assert_eq!(api.config.db.redis.host, "host");
     }
 
     #[test]

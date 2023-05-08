@@ -18,8 +18,14 @@ pub struct MongoDBConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RedisConfig {
+    pub host: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct DBConfig {
     pub mongodb: MongoDBConfig,
+    pub redis: RedisConfig,
 }
 
 #[derive(Debug, Deserialize)]
