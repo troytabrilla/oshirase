@@ -75,9 +75,14 @@ struct AniListUserQuery;
 struct AniListListQuery;
 
 #[derive(Debug, Deserialize, Serialize)]
+struct AuthConfig {
+    access_token: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
     url: String,
-    access_token: String,
+    auth: AuthConfig,
 }
 
 #[derive(Debug)]
@@ -112,7 +117,7 @@ impl AniListAPI {
             .post(self.config.url.as_str())
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.config.access_token),
+                format!("Bearer {}", self.config.auth.access_token),
             )
             .json(&body)
             .send()
@@ -179,6 +184,7 @@ impl AniListAPI {
                                     progress: Self::extract_value(entry, "/progress").as_u64(),
                                     latest: None,
                                 };
+
                                 acc.push(media);
                             }
                         }
@@ -232,10 +238,12 @@ mod tests {
     fn test_new() {
         let api = AniListAPI::new(Config {
             url: "url".to_owned(),
-            access_token: "access_token".to_owned(),
+            auth: AuthConfig {
+                access_token: "access_token".to_owned(),
+            },
         });
         assert_eq!(api.config.url, "url");
-        assert_eq!(api.config.access_token, "access_token");
+        assert_eq!(api.config.auth.access_token, "access_token");
     }
 
     #[test]

@@ -6,8 +6,13 @@ use mongodb::{
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+struct MongoDBConfig {
+    host: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
-    mongodb_host: String,
+    mongodb: MongoDBConfig,
 }
 
 pub struct MongoDB {
@@ -21,7 +26,7 @@ impl Conf for MongoDB {
 impl Default for MongoDB {
     fn default() -> MongoDB {
         let config = Self::get_config("config/db.yaml").expect("Could not load db config.");
-        let address = ServerAddress::parse(config.mongodb_host)
+        let address = ServerAddress::parse(config.mongodb.host)
             .expect("Could not parse MongoDB host address.");
         let hosts = vec![address];
         let options = ClientOptions::builder()
