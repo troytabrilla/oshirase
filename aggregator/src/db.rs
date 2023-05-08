@@ -23,6 +23,7 @@ impl Default for MongoDB {
             .build();
         let client =
             mongodb::Client::with_options(options).expect("Could not create mongodb client.");
+
         MongoDB { client }
     }
 }
@@ -36,6 +37,7 @@ impl Default for Redis {
         let config = Config::default();
         let client =
             redis::Client::open(config.db.redis.host).expect("Could not create redis client.");
+
         Redis { client }
     }
 }
@@ -47,14 +49,9 @@ impl Redis {
     {
         let mut connection = self.client.get_async_connection().await?;
 
-        let result: Result<T, redis::RedisError> = connection.get(key).await;
-        match result {
-            Ok(result) => Ok(result),
-            Err(err) => {
-                println!("{}", err);
-                Err(Box::new(err))
-            }
-        }
+        let result: T = connection.get(key).await?;
+
+        Ok(result)
     }
 
     pub async fn set<T>(&mut self, key: &str, value: &T) -> Result<(), Box<dyn Error>>
