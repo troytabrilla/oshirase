@@ -1,32 +1,17 @@
-use crate::config::Conf;
+use crate::config::Config;
 use mongodb::{
     options::{ClientOptions, ServerAddress},
     Client,
 };
-use serde::Deserialize;
-
-#[derive(Debug, Deserialize)]
-struct MongoDBConfig {
-    host: String,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Config {
-    mongodb: MongoDBConfig,
-}
 
 pub struct MongoDB {
     pub client: Client,
 }
 
-impl Conf for MongoDB {
-    type Config = Config;
-}
-
 impl Default for MongoDB {
     fn default() -> MongoDB {
-        let config = Self::get_config("config/db.yaml").expect("Could not load db config.");
-        let address = ServerAddress::parse(config.mongodb.host)
+        let config = Config::default();
+        let address = ServerAddress::parse(config.db.mongodb.host)
             .expect("Could not parse MongoDB host address.");
         let hosts = vec![address];
         let options = ClientOptions::builder()

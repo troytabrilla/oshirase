@@ -5,22 +5,21 @@ mod db;
 mod sources;
 
 use anilist_api::*;
-use serde::{Deserialize, Serialize};
 use sources::*;
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug)]
 pub struct Data {
-    lists: Box<MediaLists>,
+    lists: MediaLists,
 }
 
 pub struct Aggregator {
     anilist_api: AniListAPI,
-    data: Option<Box<Data>>,
+    data: Option<Data>,
 }
 
 impl Default for Aggregator {
     fn default() -> Aggregator {
-        let anilist_api = AniListAPI::from("config/anilist_api.yaml");
+        let anilist_api = AniListAPI::default();
 
         Aggregator {
             anilist_api,
@@ -32,9 +31,7 @@ impl Default for Aggregator {
 impl Aggregator {
     async fn extract(&mut self) -> Result<&mut Self, Box<dyn Error>> {
         let lists = self.anilist_api.extract().await?;
-        self.data = Some(Box::new(Data {
-            lists: Box::new(lists),
-        }));
+        self.data = Some(Data { lists });
 
         Ok(self)
     }
@@ -47,7 +44,7 @@ impl Aggregator {
     async fn load(&self) -> Result<&Self, Box<dyn Error>> {
         // @todo Save to mongodb, only if there are changes (use aggregation pipelines?)
         // @todo Set up Docker
-        println!("{:#?}", self.data);
+        println!("{:#?}", self.data.as_ref().unwrap().lists);
         Ok(self)
     }
 

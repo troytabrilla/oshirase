@@ -1,4 +1,4 @@
-use crate::config::Conf;
+use crate::config::Config;
 use crate::sources::Source;
 
 use async_trait::async_trait;
@@ -37,7 +37,7 @@ pub struct User {
     name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct Media {
     pub media_id: Option<u64>,
     pub media_type: Option<String>,
@@ -54,7 +54,7 @@ pub struct Media {
     pub latest: Option<u64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct MediaLists {
     pub anime: Vec<Media>,
     pub manga: Vec<Media>,
@@ -74,34 +74,14 @@ struct AniListUserQuery;
 )]
 struct AniListListQuery;
 
-#[derive(Debug, Deserialize, Serialize)]
-struct AuthConfig {
-    access_token: String,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Config {
-    url: String,
-    auth: AuthConfig,
-}
-
 #[derive(Debug)]
 pub struct AniListAPI {
     config: Config,
 }
 
-impl Conf for AniListAPI {
-    type Config = Config;
-}
-
 impl AniListAPI {
     pub fn new(config: Config) -> AniListAPI {
         AniListAPI { config }
-    }
-
-    pub fn from(filename: &str) -> AniListAPI {
-        let config = Self::get_config(filename).expect("Could not load anilist_api config.");
-        Self::new(config)
     }
 
     fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
@@ -114,10 +94,10 @@ impl AniListAPI {
     {
         let client = reqwest::Client::new();
         let json = client
-            .post(self.config.url.as_str())
+            .post(self.config.anilist_api.url.as_str())
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.config.auth.access_token),
+                format!("Bearer {}", self.config.anilist_api.auth.access_token),
             )
             .json(&body)
             .send()
@@ -218,6 +198,13 @@ impl AniListAPI {
     }
 }
 
+impl Default for AniListAPI {
+    fn default() -> AniListAPI {
+        let config = Config::default();
+        AniListAPI::new(config)
+    }
+}
+
 #[async_trait]
 impl Source for AniListAPI {
     type Data = MediaLists;
@@ -233,41 +220,44 @@ impl Source for AniListAPI {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::*;
 
     #[test]
     fn test_new() {
         let api = AniListAPI::new(Config {
-            url: "url".to_owned(),
-            auth: AuthConfig {
-                access_token: "access_token".to_owned(),
+            anilist_api: AniListAPIConfig {
+                url: "url".to_owned(),
+                auth: AniListAPIAuthConfig {
+                    access_token: "access_token".to_owned(),
+                },
+            },
+            db: DBConfig {
+                mongodb: MongoDBConfig {
+                    host: "host".to_owned(),
+                },
             },
         });
-        assert_eq!(api.config.url, "url");
-        assert_eq!(api.config.auth.access_token, "access_token");
+        assert_eq!(api.config.anilist_api.url, "url");
+        assert_eq!(api.config.anilist_api.auth.access_token, "access_token");
+        assert_eq!(api.config.db.mongodb.host, "host");
     }
 
     #[test]
-    fn test_from() {
-        let api = AniListAPI::from("config/anilist_api.yaml");
-        assert_eq!(api.config.url, "https://graphql.anilist.co");
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_from_failure() {
-        AniListAPI::from("config/should_fail.yaml");
+    fn test_default() {
+        let api = AniListAPI::default();
+        assert_eq!(api.config.anilist_api.url, "https://graphql.anilist.co");
     }
 
     #[tokio::test]
     async fn test_fetch_user() {
-        let api = AniListAPI::from("config/anilist_api.yaml");
+        let api = AniListAPI::default();
         let actual = api.fetch_user().await.unwrap();
         assert_eq!(actual.name, "***REMOVED***");
     }
 
     #[tokio::test]
     async fn test_fetch_lists() {
-        let api = AniListAPI::from("config/anilist_api.yaml");
+        let api = AniListAPI::default();
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -276,7 +266,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_extract() {
-        let api = AniListAPI::from("config/anilist_api.yaml");
+        let api = AniListAPI::default();
         let actual = api.extract().await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());

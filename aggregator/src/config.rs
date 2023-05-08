@@ -1,12 +1,68 @@
-use serde::de::DeserializeOwned;
-use std::{error::Error, fs::File};
+use serde::Deserialize;
+use std::fs;
 
-pub trait Conf {
-    type Config: DeserializeOwned;
+#[derive(Debug, Deserialize)]
+pub struct AniListAPIAuthConfig {
+    pub access_token: String,
+}
 
-    fn get_config(filename: &str) -> Result<Self::Config, Box<dyn Error>> {
-        let file: File = File::open(filename)?;
-        let config = serde_yaml::from_reader(&file)?;
-        Ok(config)
+#[derive(Debug, Deserialize)]
+pub struct AniListAPIConfig {
+    pub url: String,
+    pub auth: AniListAPIAuthConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MongoDBConfig {
+    pub host: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DBConfig {
+    pub mongodb: MongoDBConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    pub anilist_api: AniListAPIConfig,
+    pub db: DBConfig,
+}
+
+impl Config {
+    pub fn from_file(filename: &str) -> Config {
+        let config = fs::read_to_string(filename).expect("Could not read config file.");
+        let config: Config = toml::from_str(config.as_str()).expect("Could not parse config file.");
+        config
+    }
+}
+
+impl Default for Config {
+    fn default() -> Config {
+        Self::from_file("config/config.toml")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_file() {
+        let config = Config::from_file("config/config.toml");
+        assert_eq!(config.anilist_api.url, "https://graphql.anilist.co");
+        assert_eq!(config.db.mongodb.host, "localhost");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_from_file_failure() {
+        Config::from_file("should_fail.toml");
+    }
+
+    #[test]
+    fn test_default() {
+        let config = Config::default();
+        assert_eq!(config.anilist_api.url, "https://graphql.anilist.co");
+        assert_eq!(config.db.mongodb.host, "localhost");
     }
 }
