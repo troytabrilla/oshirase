@@ -64,6 +64,7 @@ impl Redis {
         let mut connection = self.client.get_async_connection().await?;
 
         connection.set(key, &(*value).clone()).await?;
+
         Ok(())
     }
 }
@@ -83,11 +84,22 @@ mod tests {
 
     #[test]
     fn test_redis_default() {
+        let key = "test_redis_default";
         let redis = Redis::default();
         let mut connection = redis.client.get_connection().unwrap();
-        let _: () = connection.set("test", 42).unwrap();
-        let actual: i32 = connection.get("test").unwrap();
+        let _: () = connection.set(key, 42).unwrap();
+        let actual: i32 = connection.get(key).unwrap();
         let expected = 42;
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn test_redis_set_and_get() {
+        let key = "test_redis_set_and_get";
+        let mut redis = Redis::default();
+        let expected = 420;
+        redis.set(key, &expected).await.unwrap();
+        let actual = redis.get::<i32>(key).await.unwrap();
         assert_eq!(actual, expected);
     }
 }
