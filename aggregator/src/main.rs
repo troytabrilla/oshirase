@@ -3,7 +3,7 @@ use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    Aggregator::default().aggregate().await?;
+    Aggregator::default().run().await?;
 
     Ok(())
 }

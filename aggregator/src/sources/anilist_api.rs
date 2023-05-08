@@ -37,7 +37,7 @@ pub struct User {
     name: String,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Media {
     pub media_id: Option<u64>,
     pub media_type: Option<String>,
@@ -54,7 +54,7 @@ pub struct Media {
     pub latest: Option<u64>,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct MediaLists {
     pub anime: Vec<Media>,
     pub manga: Vec<Media>,
@@ -216,7 +216,7 @@ impl AniListAPI {
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn aggregate(&self) -> Result<MediaLists, Box<dyn Error>> {
+    async fn extract(&self) -> Result<MediaLists, Box<dyn Error>> {
         let user = self.fetch_user().await.unwrap();
         let lists = self.fetch_lists(user.id).await.unwrap();
 
@@ -267,9 +267,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_aggregate() {
+    async fn test_extract() {
         let api = AniListAPI::from("config/anilist_api.yaml");
-        let actual = api.aggregate().await.unwrap();
+        let actual = api.extract().await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }
