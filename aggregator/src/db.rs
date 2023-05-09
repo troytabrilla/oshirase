@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::Result;
 use bson::to_document;
 use futures::future::try_join_all;
 use mongodb::bson::doc;
@@ -9,7 +10,6 @@ extern crate redis;
 use crate::db::redis::AsyncCommands;
 #[allow(unused_imports)]
 use redis::Commands;
-use std::error::Error;
 
 pub struct MongoDB {
     pub client: mongodb::Client,
@@ -40,7 +40,7 @@ impl MongoDB {
         collection: &str,
         documents: &Vec<T>,
         query: F,
-    ) -> Result<(), Box<dyn Error>>
+    ) -> Result<()>
     where
         T: Serialize,
         F: Fn(&bson::Document) -> bson::Document,
@@ -80,7 +80,7 @@ impl Default for Redis {
 }
 
 impl Redis {
-    pub async fn get<T>(&mut self, key: &str) -> Result<T, Box<dyn Error>>
+    pub async fn get<T>(&mut self, key: &str) -> Result<T>
     where
         T: FromRedisValue + std::fmt::Debug,
     {
@@ -91,7 +91,7 @@ impl Redis {
     }
 
     #[allow(dead_code)]
-    pub async fn set<T>(&mut self, key: &str, value: &T) -> Result<(), Box<dyn Error>>
+    pub async fn set<T>(&mut self, key: &str, value: &T) -> Result<()>
     where
         T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
     {
@@ -101,12 +101,7 @@ impl Redis {
         Ok(())
     }
 
-    pub async fn set_ex<T>(
-        &mut self,
-        key: &str,
-        value: &T,
-        seconds: usize,
-    ) -> Result<(), Box<dyn Error>>
+    pub async fn set_ex<T>(&mut self, key: &str, value: &T, seconds: usize) -> Result<()>
     where
         T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
     {

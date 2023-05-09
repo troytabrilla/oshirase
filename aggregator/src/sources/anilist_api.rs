@@ -1,6 +1,7 @@
 use crate::config::{AniListAPIConfig, Config};
 use crate::db;
 use crate::sources::Source;
+use crate::Result;
 
 use async_trait::async_trait;
 use graphql_client::GraphQLQuery;
@@ -89,7 +90,7 @@ impl AniListAPI {
         json.pointer(key).unwrap_or(&Json::Null)
     }
 
-    async fn fetch<T>(&self, body: &T) -> Result<Json, Box<dyn Error>>
+    async fn fetch<T>(&self, body: &T) -> Result<Json>
     where
         T: Serialize,
     {
@@ -109,7 +110,7 @@ impl AniListAPI {
         Ok(json)
     }
 
-    pub async fn fetch_user(&self) -> Result<User, Box<dyn Error>> {
+    pub async fn fetch_user(&self) -> Result<User> {
         let variables = ani_list_user_query::Variables {};
         let body = AniListUserQuery::build_query(variables);
 
@@ -127,7 +128,7 @@ impl AniListAPI {
         })
     }
 
-    fn transform(&self, json: Option<&Vec<Json>>) -> Result<Vec<Media>, Box<dyn Error>> {
+    fn transform(&self, json: Option<&Vec<Json>>) -> Result<Vec<Media>> {
         match json {
             Some(json) => {
                 let list: Vec<Media> =
@@ -181,7 +182,7 @@ impl AniListAPI {
         }
     }
 
-    pub async fn fetch_lists(&self, user_id: u64) -> Result<MediaLists, Box<dyn Error>> {
+    pub async fn fetch_lists(&self, user_id: u64) -> Result<MediaLists> {
         let variables = ani_list_list_query::Variables {
             user_id: Some(user_id as i64),
         };
@@ -212,7 +213,7 @@ impl Default for AniListAPI {
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn extract(&self) -> Result<MediaLists, Box<dyn Error>> {
+    async fn extract(&self) -> Result<MediaLists> {
         let user = self.fetch_user().await?;
 
         match self.check_cache(&user).await {
@@ -234,7 +235,7 @@ impl AniListAPI {
         format!("anilist_api:fetch_lists:{}", user_id)
     }
 
-    async fn check_cache(&self, user: &User) -> Result<MediaLists, Box<dyn Error>> {
+    async fn check_cache(&self, user: &User) -> Result<MediaLists> {
         let mut redis = db::Redis::default();
         let cache_key = Self::get_cache_key(user.id);
 
@@ -244,10 +245,7 @@ impl AniListAPI {
         Ok(cached)
     }
 
-    async fn cache_value<T>(&self, user: &User, value: &T)
-    where
-        T: Serialize,
-    {
+    async fn cache_value(&self, user: &User, value: &MediaLists) {
         let mut redis = db::Redis::default();
         let cache_key = Self::get_cache_key(user.id);
 

@@ -1,8 +1,8 @@
 use aggregator::Aggregator;
-use std::error::Error;
+use aggregator::Result;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<()> {
     Aggregator::default().run().await?;
 
     Ok(())

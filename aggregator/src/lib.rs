@@ -9,6 +9,8 @@ mod sources;
 use anilist_api::*;
 use sources::*;
 
+pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
 #[derive(Debug)]
 struct AggregatorError {
     message: String,
@@ -52,19 +54,19 @@ impl Default for Aggregator {
 }
 
 impl Aggregator {
-    async fn extract(&mut self) -> Result<&mut Self, Box<dyn Error>> {
+    async fn extract(&mut self) -> Result<&mut Self> {
         let lists = self.anilist_api.extract().await?;
         self.data = Some(Data { lists });
 
         Ok(self)
     }
 
-    async fn transform(&mut self) -> Result<&mut Self, Box<dyn Error>> {
+    async fn transform(&mut self) -> Result<&mut Self> {
         // @todo Combine data from sources into one result, i.e. update `latest` field
         Ok(self)
     }
 
-    async fn load(&self) -> Result<&Self, Box<dyn Error>> {
+    async fn load(&self) -> Result<&Self> {
         // @todo Set up Docker
         let mongodb = db::MongoDB::default();
 
@@ -84,7 +86,7 @@ impl Aggregator {
         Ok(self)
     }
 
-    pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn run(&mut self) -> Result<()> {
         self.extract().await?.transform().await?.load().await?;
 
         Ok(())
