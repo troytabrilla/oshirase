@@ -67,7 +67,6 @@ impl Aggregator {
     }
 
     async fn load(&self) -> Result<&Self> {
-        // @todo Set up Docker
         let mongodb = db::MongoDB::default();
 
         let lists = match &self.data {
@@ -75,10 +74,10 @@ impl Aggregator {
             None => return Err(AggregatorError::boxed("No lists to persist.")),
         };
 
+        // @todo Update query to only update if there are changes
         let query = |doc: &bson::Document| doc! { "media_id": doc.get("media_id") };
 
         let anime_future = mongodb.upsert_documents("anime", &lists.anime, query);
-
         let manga_future = mongodb.upsert_documents("manga", &lists.manga, query);
 
         try_join!(anime_future, manga_future)?;
