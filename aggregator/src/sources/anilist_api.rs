@@ -217,7 +217,7 @@ impl Source for AniListAPI {
 
         let cached = self.check_cache(&user).await;
         if !cached.is_empty() {
-            match serde_json::from_str::<MediaLists>(cached.as_str()) {
+            match serde_json::from_str::<MediaLists>(&cached) {
                 Ok(lists) => {
                     return Ok(lists);
                 }
@@ -232,7 +232,7 @@ impl Source for AniListAPI {
         let serialized = serde_json::to_string(&lists);
         match serialized {
             Ok(serialized) => {
-                self.cache_value(&user, serialized).await;
+                self.cache_value(&user, &serialized).await;
             }
             Err(err) => {
                 println!("Could not stringify results: {}.", err);
@@ -249,12 +249,10 @@ impl AniListAPI {
     }
 
     async fn check_cache(&self, user: &User) -> String {
-        let cache_key = Self::get_cache_key(user.id);
-        let cache_key = cache_key.as_str();
-
         let mut redis = db::Redis::default();
+        let cache_key = Self::get_cache_key(user.id);
 
-        let cached: Result<String, Box<dyn Error>> = redis.get::<String>(cache_key).await;
+        let cached = redis.get::<String>(&cache_key).await;
         match cached {
             Ok(cached) => cached,
             Err(err) => {
@@ -264,13 +262,11 @@ impl AniListAPI {
         }
     }
 
-    async fn cache_value(&self, user: &User, value: String) {
-        let cache_key = Self::get_cache_key(user.id);
-        let cache_key = cache_key.as_str();
-
+    async fn cache_value(&self, user: &User, value: &String) {
         let mut redis = db::Redis::default();
+        let cache_key = Self::get_cache_key(user.id);
 
-        if let Err(err) = redis.set::<String>(cache_key, &value).await {
+        if let Err(err) = redis.set_ex::<String>(&cache_key, value, 600).await {
             println!("Could not cache value for key {}: {}", cache_key, err);
         }
     }
@@ -282,7 +278,7 @@ mod tests {
     use crate::config::*;
 
     #[test]
-    fn test_new() {
+    fn test_anilist_api_new() {
         let api = AniListAPI::new(Config {
             anilist_api: AniListAPIConfig {
                 url: "url".to_owned(),
@@ -306,20 +302,20 @@ mod tests {
     }
 
     #[test]
-    fn test_default() {
+    fn test_anilist_api_default() {
         let api = AniListAPI::default();
         assert_eq!(api.config.anilist_api.url, "https://graphql.anilist.co");
     }
 
     #[tokio::test]
-    async fn test_fetch_user() {
+    async fn test_anilist_api_fetch_user() {
         let api = AniListAPI::default();
         let actual = api.fetch_user().await.unwrap();
         assert_eq!(actual.name, "***REMOVED***");
     }
 
     #[tokio::test]
-    async fn test_fetch_lists() {
+    async fn test_anilist_api_fetch_lists() {
         let api = AniListAPI::default();
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
@@ -328,7 +324,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_extract() {
+    async fn test_anilist_api_extract() {
         let api = AniListAPI::default();
         let actual = api.extract().await.unwrap();
         assert!(!actual.anime.is_empty());

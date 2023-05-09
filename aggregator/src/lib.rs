@@ -44,7 +44,7 @@ impl Aggregator {
     async fn load(&self) -> Result<&Self, Box<dyn Error>> {
         // @todo Save to mongodb, only if there are changes (use aggregation pipelines?)
         // @todo Set up Docker
-        println!("{:#?}", self.data.as_ref().unwrap().lists);
+        println!("{:#?}", self.data.as_ref().unwrap().lists.anime[0]);
         Ok(self)
     }
 

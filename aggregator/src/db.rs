@@ -48,19 +48,33 @@ impl Redis {
         T: FromRedisValue + std::fmt::Debug,
     {
         let mut connection = self.client.get_async_connection().await?;
-
         let result: T = connection.get(key).await?;
 
         Ok(result)
     }
 
+    #[allow(dead_code)]
     pub async fn set<T>(&mut self, key: &str, value: &T) -> Result<(), Box<dyn Error>>
     where
         T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
     {
         let mut connection = self.client.get_async_connection().await?;
-
         connection.set(key, &(*value).clone()).await?;
+
+        Ok(())
+    }
+
+    pub async fn set_ex<T>(
+        &mut self,
+        key: &str,
+        value: &T,
+        seconds: usize,
+    ) -> Result<(), Box<dyn Error>>
+    where
+        T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
+    {
+        let mut connection = self.client.get_async_connection().await?;
+        connection.set_ex(key, &(*value).clone(), seconds).await?;
 
         Ok(())
     }
