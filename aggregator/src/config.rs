@@ -37,8 +37,8 @@ pub struct Config {
 
 impl Config {
     pub fn from_file(filename: &str) -> Config {
-        let config = fs::read_to_string(filename).expect("Could not read config file.");
-        let config: Config = toml::from_str(&config).expect("Could not parse config file.");
+        let config = fs::read_to_string(filename).unwrap();
+        let config: Config = toml::from_str(&config).unwrap();
         config
     }
 }

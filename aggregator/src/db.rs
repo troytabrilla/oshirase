@@ -1,6 +1,10 @@
-use crate::config::{Config, MongoDBConfig};
-use mongodb::options::{ClientOptions, ServerAddress};
+use crate::config::Config;
+use bson::to_document;
+use futures::future::try_join_all;
+use mongodb::bson::doc;
+use mongodb::options::{ClientOptions, ServerAddress, UpdateOptions};
 use redis::{FromRedisValue, ToRedisArgs};
+use serde::Serialize;
 extern crate redis;
 use crate::db::redis::AsyncCommands;
 #[allow(unused_imports)]
@@ -9,33 +13,56 @@ use std::error::Error;
 
 pub struct MongoDB {
     pub client: mongodb::Client,
-    database: String,
+    pub database: String,
 }
 
 impl Default for MongoDB {
     fn default() -> MongoDB {
         let config = Config::default();
-        let address = ServerAddress::parse(config.db.mongodb.host)
-            .expect("Could not parse MongoDB host address.");
+        let address = ServerAddress::parse(config.db.mongodb.host).unwrap();
         let hosts = vec![address];
         let options = ClientOptions::builder()
             .hosts(hosts)
             .app_name("oshirase-aggregator".to_owned())
             .build();
-        let client =
-            mongodb::Client::with_options(options).expect("Could not create mongodb client.");
+        let client = mongodb::Client::with_options(options).unwrap();
 
         MongoDB {
             client,
-            database: config.db.mongodb.database.to_owned(),
+            database: config.db.mongodb.database,
         }
     }
 }
 
 impl MongoDB {
-    pub async fn insert_many<T>(&self, collection: &str, documents: Vec<T>) {
+    pub async fn upsert_documents<T, F>(
+        &self,
+        collection: &str,
+        documents: &Vec<T>,
+        query: F,
+    ) -> Result<(), Box<dyn Error>>
+    where
+        T: Serialize,
+        F: Fn(&bson::Document) -> bson::Document,
+    {
         let database = self.client.database(&self.database);
         let collection = database.collection::<T>(collection);
+
+        let mut futures = Vec::new();
+
+        for document in documents {
+            let document = to_document(document)?;
+            let query = query(&document);
+            futures.push(collection.update_one(
+                query.clone(),
+                doc! { "$set": document },
+                UpdateOptions::builder().upsert(true).build(),
+            ));
+        }
+
+        try_join_all(futures).await?;
+
+        Ok(())
     }
 }
 
@@ -46,8 +73,7 @@ pub struct Redis {
 impl Default for Redis {
     fn default() -> Redis {
         let config = Config::default();
-        let client =
-            redis::Client::open(config.db.redis.host).expect("Could not create redis client.");
+        let client = redis::Client::open(config.db.redis.host).unwrap();
 
         Redis { client }
     }
