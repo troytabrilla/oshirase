@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{AniListAPIConfig, Config};
 use crate::db;
 use crate::sources::Source;
 
@@ -77,11 +77,11 @@ struct AniListListQuery;
 
 #[derive(Debug)]
 pub struct AniListAPI {
-    config: Config,
+    config: AniListAPIConfig,
 }
 
 impl AniListAPI {
-    pub fn new(config: Config) -> AniListAPI {
+    pub fn new(config: AniListAPIConfig) -> AniListAPI {
         AniListAPI { config }
     }
 
@@ -95,10 +95,10 @@ impl AniListAPI {
     {
         let client = reqwest::Client::new();
         let json = client
-            .post(self.config.anilist_api.url.as_str())
+            .post(self.config.url.as_str())
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.config.anilist_api.auth.access_token),
+                format!("Bearer {}", self.config.auth.access_token),
             )
             .json(&body)
             .send()
@@ -204,7 +204,7 @@ impl AniListAPI {
 impl Default for AniListAPI {
     fn default() -> AniListAPI {
         let config = Config::default();
-        AniListAPI::new(config)
+        AniListAPI::new(config.anilist_api)
     }
 }
 
@@ -279,32 +279,20 @@ mod tests {
 
     #[test]
     fn test_anilist_api_new() {
-        let api = AniListAPI::new(Config {
-            anilist_api: AniListAPIConfig {
-                url: "url".to_owned(),
-                auth: AniListAPIAuthConfig {
-                    access_token: "access_token".to_owned(),
-                },
-            },
-            db: DBConfig {
-                mongodb: MongoDBConfig {
-                    host: "host".to_owned(),
-                },
-                redis: RedisConfig {
-                    host: "host".to_owned(),
-                },
+        let api = AniListAPI::new(AniListAPIConfig {
+            url: "url".to_owned(),
+            auth: AniListAPIAuthConfig {
+                access_token: "access_token".to_owned(),
             },
         });
-        assert_eq!(api.config.anilist_api.url, "url");
-        assert_eq!(api.config.anilist_api.auth.access_token, "access_token");
-        assert_eq!(api.config.db.mongodb.host, "host");
-        assert_eq!(api.config.db.redis.host, "host");
+        assert_eq!(api.config.url, "url");
+        assert_eq!(api.config.auth.access_token, "access_token");
     }
 
     #[test]
     fn test_anilist_api_default() {
         let api = AniListAPI::default();
-        assert_eq!(api.config.anilist_api.url, "https://graphql.anilist.co");
+        assert_eq!(api.config.url, "https://graphql.anilist.co");
     }
 
     #[tokio::test]

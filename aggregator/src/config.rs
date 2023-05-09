@@ -15,6 +15,7 @@ pub struct AniListAPIConfig {
 #[derive(Debug, Deserialize)]
 pub struct MongoDBConfig {
     pub host: String,
+    pub database: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,6 +58,7 @@ mod tests {
         let config = Config::from_file("config/config.toml");
         assert_eq!(config.anilist_api.url, "https://graphql.anilist.co");
         assert_eq!(config.db.mongodb.host, "localhost");
+        assert_eq!(config.db.mongodb.database, "test");
     }
 
     #[test]
@@ -70,5 +72,6 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.anilist_api.url, "https://graphql.anilist.co");
         assert_eq!(config.db.mongodb.host, "localhost");
+        assert_eq!(config.db.mongodb.database, "test");
     }
 }

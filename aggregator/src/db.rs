@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, MongoDBConfig};
 use mongodb::options::{ClientOptions, ServerAddress};
 use redis::{FromRedisValue, ToRedisArgs};
 extern crate redis;
@@ -9,6 +9,7 @@ use std::error::Error;
 
 pub struct MongoDB {
     pub client: mongodb::Client,
+    database: String,
 }
 
 impl Default for MongoDB {
@@ -24,7 +25,17 @@ impl Default for MongoDB {
         let client =
             mongodb::Client::with_options(options).expect("Could not create mongodb client.");
 
-        MongoDB { client }
+        MongoDB {
+            client,
+            database: config.db.mongodb.database.to_owned(),
+        }
+    }
+}
+
+impl MongoDB {
+    pub async fn insert_many<T>(&self, collection: &str, documents: Vec<T>) {
+        let database = self.client.database(&self.database);
+        let collection = database.collection::<T>(collection);
     }
 }
 
