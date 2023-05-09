@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, MongoDBConfig, RedisConfig};
 use crate::Result;
 
 use bson::to_document;
@@ -21,7 +21,14 @@ pub struct MongoDB {
 impl Default for MongoDB {
     fn default() -> MongoDB {
         let config = Config::default();
-        let address = ServerAddress::parse(config.db.mongodb.host).unwrap();
+
+        Self::new(config.db.mongodb)
+    }
+}
+
+impl MongoDB {
+    pub fn new(config: MongoDBConfig) -> MongoDB {
+        let address = ServerAddress::parse(config.host).unwrap();
         let hosts = vec![address];
         let options = ClientOptions::builder()
             .hosts(hosts)
@@ -31,12 +38,10 @@ impl Default for MongoDB {
 
         MongoDB {
             client,
-            database: config.db.mongodb.database,
+            database: config.database,
         }
     }
-}
 
-impl MongoDB {
     pub async fn upsert_documents<T, F>(
         &self,
         collection: &str,
@@ -75,13 +80,18 @@ pub struct Redis {
 impl Default for Redis {
     fn default() -> Redis {
         let config = Config::default();
-        let client = redis::Client::open(config.db.redis.host).unwrap();
 
-        Redis { client }
+        Self::new(config.db.redis)
     }
 }
 
 impl Redis {
+    pub fn new(config: RedisConfig) -> Redis {
+        let client = redis::Client::open(config.host).unwrap();
+
+        Redis { client }
+    }
+
     async fn get<T>(&mut self, key: &str) -> Result<T>
     where
         T: FromRedisValue + std::fmt::Debug,

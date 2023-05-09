@@ -1,4 +1,4 @@
-use crate::config::{AniListAPIConfig, Config};
+use crate::config::Config;
 use crate::db;
 use crate::sources::Source;
 use crate::Result;
@@ -78,11 +78,19 @@ struct AniListListQuery;
 
 #[derive(Debug)]
 pub struct AniListAPI {
-    config: AniListAPIConfig,
+    config: Config,
+}
+
+impl Default for AniListAPI {
+    fn default() -> AniListAPI {
+        let config = Config::default();
+
+        AniListAPI::new(config)
+    }
 }
 
 impl AniListAPI {
-    pub fn new(config: AniListAPIConfig) -> AniListAPI {
+    pub fn new(config: Config) -> AniListAPI {
         AniListAPI { config }
     }
 
@@ -96,10 +104,10 @@ impl AniListAPI {
     {
         let client = reqwest::Client::new();
         let json = client
-            .post(self.config.url.as_str())
+            .post(self.config.anilist_api.url.as_str())
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.config.auth.access_token),
+                format!("Bearer {}", self.config.anilist_api.auth.access_token),
             )
             .json(&body)
             .send()
@@ -200,12 +208,25 @@ impl AniListAPI {
 
         Ok(lists)
     }
-}
 
-impl Default for AniListAPI {
-    fn default() -> AniListAPI {
-        let config = Config::default();
-        AniListAPI::new(config.anilist_api)
+    fn get_cache_key(user_id: u64) -> String {
+        format!("anilist_api:fetch_lists:{}", user_id)
+    }
+
+    async fn check_cache(&self, user: &User) -> Result<MediaLists> {
+        let mut redis = db::Redis::new(self.config.db.redis.clone());
+        let key = Self::get_cache_key(user.id);
+
+        let cached: MediaLists = redis.check_cache(&key).await?;
+
+        Ok(cached)
+    }
+
+    async fn cache_value(&self, user: &User, lists: &MediaLists) {
+        let mut redis = db::Redis::new(self.config.db.redis.clone());
+        let key = Self::get_cache_key(user.id);
+
+        redis.cache_value_ex(&key, lists, 600).await;
     }
 }
 
@@ -230,27 +251,7 @@ impl Source for AniListAPI {
     }
 }
 
-impl AniListAPI {
-    fn get_cache_key(user_id: u64) -> String {
-        format!("anilist_api:fetch_lists:{}", user_id)
-    }
-
-    async fn check_cache(&self, user: &User) -> Result<MediaLists> {
-        let mut redis = db::Redis::default();
-        let key = Self::get_cache_key(user.id);
-
-        let cached: MediaLists = redis.check_cache(&key).await?;
-
-        Ok(cached)
-    }
-
-    async fn cache_value(&self, user: &User, lists: &MediaLists) {
-        let mut redis = db::Redis::default();
-        let key = Self::get_cache_key(user.id);
-
-        redis.cache_value_ex(&key, lists, 600).await;
-    }
-}
+impl AniListAPI {}
 
 #[cfg(test)]
 mod tests {
@@ -259,20 +260,31 @@ mod tests {
 
     #[test]
     fn test_anilist_api_new() {
-        let api = AniListAPI::new(AniListAPIConfig {
-            url: "url".to_owned(),
-            auth: AniListAPIAuthConfig {
-                access_token: "access_token".to_owned(),
+        let api = AniListAPI::new(Config {
+            anilist_api: AniListAPIConfig {
+                url: "url".to_owned(),
+                auth: AniListAPIAuthConfig {
+                    access_token: "access_token".to_owned(),
+                },
+            },
+            db: DBConfig {
+                mongodb: MongoDBConfig {
+                    host: "host".to_owned(),
+                    database: "database".to_owned(),
+                },
+                redis: RedisConfig {
+                    host: "host".to_owned(),
+                },
             },
         });
-        assert_eq!(api.config.url, "url");
-        assert_eq!(api.config.auth.access_token, "access_token");
+        assert_eq!(api.config.anilist_api.url, "url");
+        assert_eq!(api.config.anilist_api.auth.access_token, "access_token");
     }
 
     #[test]
     fn test_anilist_api_default() {
         let api = AniListAPI::default();
-        assert_eq!(api.config.url, "https://graphql.anilist.co");
+        assert_eq!(api.config.anilist_api.url, "https://graphql.anilist.co");
     }
 
     #[tokio::test]

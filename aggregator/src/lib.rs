@@ -2,11 +2,12 @@ use mongodb::bson::doc;
 use std::{error::Error, fmt};
 use tokio::try_join;
 
-mod config;
+pub mod config;
 mod db;
 mod sources;
 
 use anilist_api::*;
+use config::Config;
 use sources::*;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
@@ -39,21 +40,34 @@ pub struct Data {
 
 pub struct Aggregator {
     anilist_api: AniListAPI,
+    config: Config,
     data: Option<Data>,
 }
 
 impl Default for Aggregator {
     fn default() -> Aggregator {
+        let config = Config::default();
         let anilist_api = AniListAPI::default();
 
         Aggregator {
             anilist_api,
+            config,
             data: None,
         }
     }
 }
 
 impl Aggregator {
+    pub fn new(config: Config) -> Aggregator {
+        let anilist_api = AniListAPI::new(config.clone());
+
+        Aggregator {
+            anilist_api,
+            config,
+            data: None,
+        }
+    }
+
     async fn extract(&mut self) -> Result<&mut Self> {
         let lists = self.anilist_api.extract().await?;
         self.data = Some(Data { lists });
@@ -67,7 +81,7 @@ impl Aggregator {
     }
 
     async fn load(&self) -> Result<&Self> {
-        let mongodb = db::MongoDB::default();
+        let mongodb = db::MongoDB::new(self.config.db.mongodb.clone());
 
         let lists = match &self.data {
             Some(data) => &data.lists,

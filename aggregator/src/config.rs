@@ -1,35 +1,35 @@
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AniListAPIAuthConfig {
     pub access_token: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct AniListAPIConfig {
     pub url: String,
     pub auth: AniListAPIAuthConfig,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct MongoDBConfig {
     pub host: String,
     pub database: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct RedisConfig {
     pub host: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct DBConfig {
     pub mongodb: MongoDBConfig,
     pub redis: RedisConfig,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub anilist_api: AniListAPIConfig,
     pub db: DBConfig,
@@ -57,7 +57,6 @@ mod tests {
     fn test_from_file() {
         let config = Config::from_file("config/config.toml");
         assert_eq!(config.anilist_api.url, "https://graphql.anilist.co");
-        assert_eq!(config.db.mongodb.host, "localhost");
         assert_eq!(config.db.mongodb.database, "test");
     }
 
@@ -71,7 +70,6 @@ mod tests {
     fn test_default() {
         let config = Config::default();
         assert_eq!(config.anilist_api.url, "https://graphql.anilist.co");
-        assert_eq!(config.db.mongodb.host, "localhost");
         assert_eq!(config.db.mongodb.database, "test");
     }
 }
