@@ -215,29 +215,15 @@ impl Source for AniListAPI {
     async fn extract(&self) -> Result<MediaLists, Box<dyn Error>> {
         let user = self.fetch_user().await?;
 
-        let cached = self.check_cache(&user).await;
-        if !cached.is_empty() {
-            match serde_json::from_str::<MediaLists>(&cached) {
-                Ok(lists) => {
-                    return Ok(lists);
-                }
-                Err(err) => {
-                    println!("Could not parse cached response: {}", err);
-                }
+        match self.check_cache(&user).await {
+            Ok(cached) => return Ok(cached),
+            Err(err) => {
+                println!("Could not get cached response: {}", err);
             }
         }
 
         let lists = self.fetch_lists(user.id).await?;
-
-        let serialized = serde_json::to_string(&lists);
-        match serialized {
-            Ok(serialized) => {
-                self.cache_value(&user, &serialized).await;
-            }
-            Err(err) => {
-                println!("Could not stringify results: {}.", err);
-            }
-        }
+        self.cache_value(&user, &lists).await;
 
         Ok(lists)
     }
@@ -248,25 +234,32 @@ impl AniListAPI {
         format!("anilist_api:fetch_lists:{}", user_id)
     }
 
-    async fn check_cache(&self, user: &User) -> String {
+    async fn check_cache(&self, user: &User) -> Result<MediaLists, Box<dyn Error>> {
         let mut redis = db::Redis::default();
         let cache_key = Self::get_cache_key(user.id);
 
-        let cached = redis.get::<String>(&cache_key).await;
-        match cached {
-            Ok(cached) => cached,
-            Err(err) => {
-                println!("No cached value for key {}: {}", cache_key, err);
-                String::new()
-            }
-        }
+        let cached = redis.get::<String>(&cache_key).await?;
+        let cached = serde_json::from_str::<MediaLists>(&cached)?;
+
+        Ok(cached)
     }
 
-    async fn cache_value(&self, user: &User, value: &String) {
+    async fn cache_value<T>(&self, user: &User, value: &T)
+    where
+        T: Serialize,
+    {
         let mut redis = db::Redis::default();
         let cache_key = Self::get_cache_key(user.id);
 
-        if let Err(err) = redis.set_ex::<String>(&cache_key, value, 600).await {
+        let serialized = match serde_json::to_string(value) {
+            Ok(serialized) => serialized,
+            Err(err) => {
+                println!("Could not stringify results: {}.", err);
+                return;
+            }
+        };
+
+        if let Err(err) = redis.set_ex::<String>(&cache_key, &serialized, 600).await {
             println!("Could not cache value for key {}: {}", cache_key, err);
         }
     }
