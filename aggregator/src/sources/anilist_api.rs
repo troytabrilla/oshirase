@@ -237,29 +237,18 @@ impl AniListAPI {
 
     async fn check_cache(&self, user: &User) -> Result<MediaLists> {
         let mut redis = db::Redis::default();
-        let cache_key = Self::get_cache_key(user.id);
+        let key = Self::get_cache_key(user.id);
 
-        let cached = redis.get::<String>(&cache_key).await?;
-        let cached = serde_json::from_str::<MediaLists>(&cached)?;
+        let cached: MediaLists = redis.check_cache(&key).await?;
 
         Ok(cached)
     }
 
-    async fn cache_value(&self, user: &User, value: &MediaLists) {
+    async fn cache_value(&self, user: &User, lists: &MediaLists) {
         let mut redis = db::Redis::default();
-        let cache_key = Self::get_cache_key(user.id);
+        let key = Self::get_cache_key(user.id);
 
-        let serialized = match serde_json::to_string(value) {
-            Ok(serialized) => serialized,
-            Err(err) => {
-                println!("Could not stringify results: {}.", err);
-                return;
-            }
-        };
-
-        if let Err(err) = redis.set_ex::<String>(&cache_key, &serialized, 600).await {
-            println!("Could not cache value for key {}: {}", cache_key, err);
-        }
+        redis.cache_value_ex(&key, lists, 600).await;
     }
 }
 

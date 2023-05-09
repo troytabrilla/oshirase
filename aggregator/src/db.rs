@@ -1,15 +1,17 @@
 use crate::config::Config;
 use crate::Result;
+
 use bson::to_document;
 use futures::future::try_join_all;
-use mongodb::bson::doc;
-use mongodb::options::{ClientOptions, ServerAddress, UpdateOptions};
-use redis::{FromRedisValue, ToRedisArgs};
-use serde::Serialize;
-extern crate redis;
-use crate::db::redis::AsyncCommands;
+use mongodb::{
+    bson::doc,
+    options::{ClientOptions, ServerAddress, UpdateOptions},
+};
+use redis::AsyncCommands;
 #[allow(unused_imports)]
 use redis::Commands;
+use redis::{FromRedisValue, ToRedisArgs};
+use serde::{de::DeserializeOwned, Serialize};
 
 pub struct MongoDB {
     pub client: mongodb::Client,
@@ -80,7 +82,7 @@ impl Default for Redis {
 }
 
 impl Redis {
-    pub async fn get<T>(&mut self, key: &str) -> Result<T>
+    async fn get<T>(&mut self, key: &str) -> Result<T>
     where
         T: FromRedisValue + std::fmt::Debug,
     {
@@ -90,18 +92,7 @@ impl Redis {
         Ok(result)
     }
 
-    #[allow(dead_code)]
-    pub async fn set<T>(&mut self, key: &str, value: &T) -> Result<()>
-    where
-        T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
-    {
-        let mut connection = self.client.get_async_connection().await?;
-        connection.set(key, &(*value).clone()).await?;
-
-        Ok(())
-    }
-
-    pub async fn set_ex<T>(&mut self, key: &str, value: &T, seconds: usize) -> Result<()>
+    async fn set_ex<T>(&mut self, key: &str, value: &T, seconds: usize) -> Result<()>
     where
         T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
     {
@@ -109,6 +100,33 @@ impl Redis {
         connection.set_ex(key, &(*value).clone(), seconds).await?;
 
         Ok(())
+    }
+
+    pub async fn check_cache<T>(&mut self, key: &str) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        let cached = self.get::<String>(key).await?;
+        let cached = serde_json::from_str::<T>(&cached)?;
+
+        Ok(cached)
+    }
+
+    pub async fn cache_value_ex<T>(&mut self, key: &str, value: &T, seconds: usize)
+    where
+        T: Serialize,
+    {
+        let serialized = match serde_json::to_string(value) {
+            Ok(serialized) => serialized,
+            Err(err) => {
+                println!("Could not stringify results: {}.", err);
+                return;
+            }
+        };
+
+        if let Err(err) = self.set_ex::<String>(key, &serialized, seconds).await {
+            println!("Could not cache value for key {}: {}", key, err);
+        }
     }
 }
 
@@ -137,12 +155,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_redis_set_and_get() {
+    async fn test_redis_cache() {
         let key = "test_redis_set_and_get";
         let mut redis = Redis::default();
         let expected = 420;
-        redis.set(key, &expected).await.unwrap();
-        let actual = redis.get::<i32>(key).await.unwrap();
+        redis.cache_value_ex(key, &expected, 10).await;
+        let actual: i32 = redis.check_cache(key).await.unwrap();
         assert_eq!(actual, expected);
     }
 }
