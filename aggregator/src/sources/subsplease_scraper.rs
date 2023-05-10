@@ -14,13 +14,15 @@ impl Default for SubsPleaseScraper {
     fn default() -> SubsPleaseScraper {
         let config = Config::default();
 
-        SubsPleaseScraper::new(config.subsplease_scraper)
+        SubsPleaseScraper::new(&config.subsplease_scraper)
     }
 }
 
 impl SubsPleaseScraper {
-    pub fn new(config: SubsPleaseScraperConfig) -> SubsPleaseScraper {
-        SubsPleaseScraper { config }
+    pub fn new(config: &SubsPleaseScraperConfig) -> SubsPleaseScraper {
+        SubsPleaseScraper {
+            config: config.clone(),
+        }
     }
 }
 
@@ -103,6 +105,8 @@ impl Source for SubsPleaseScraper {
     type Data = SubsPleaseSchedule;
 
     async fn extract(&self) -> Result<SubsPleaseSchedule> {
+        // @todo Add caching (1 day)
+        // @todo Add option to skip cache
         self.scrape().await
     }
 }

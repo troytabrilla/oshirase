@@ -8,6 +8,7 @@ mod sources;
 use anilist_api::*;
 use config::Config;
 use sources::*;
+use subsplease_scraper::*;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -35,10 +36,12 @@ impl Error for AggregatorError {}
 #[derive(Debug)]
 pub struct Data {
     lists: MediaLists,
+    schedule: SubsPleaseSchedule,
 }
 
 pub struct Aggregator {
     anilist_api: AniListAPI,
+    subsplease_scraper: SubsPleaseScraper,
     config: Config,
     data: Option<Data>,
 }
@@ -47,9 +50,11 @@ impl Default for Aggregator {
     fn default() -> Aggregator {
         let config = Config::default();
         let anilist_api = AniListAPI::default();
+        let subsplease_scraper = SubsPleaseScraper::default();
 
         Aggregator {
             anilist_api,
+            subsplease_scraper,
             config,
             data: None,
         }
@@ -58,18 +63,23 @@ impl Default for Aggregator {
 
 impl Aggregator {
     pub fn new(config: Config) -> Aggregator {
-        let anilist_api = AniListAPI::new(config.clone());
+        let anilist_api = AniListAPI::new(&config);
+        let subsplease_scraper = SubsPleaseScraper::new(&config.subsplease_scraper);
 
         Aggregator {
             anilist_api,
+            subsplease_scraper,
             config,
             data: None,
         }
     }
 
+    // @todo Add option to skip cache
     async fn extract(&mut self) -> Result<&mut Self> {
         let lists = self.anilist_api.extract().await?;
-        self.data = Some(Data { lists });
+        let schedule = self.subsplease_scraper.extract().await?;
+
+        self.data = Some(Data { lists, schedule });
 
         Ok(self)
     }
@@ -80,7 +90,7 @@ impl Aggregator {
     }
 
     async fn load(&self) -> Result<&Self> {
-        let mongodb = db::MongoDB::new(self.config.db.mongodb.clone());
+        let mongodb = db::MongoDB::new(&self.config.db.mongodb);
 
         let lists = match &self.data {
             Some(data) => &data.lists,
@@ -110,20 +120,7 @@ mod tests {
     #[tokio::test]
     async fn test_aggregator_run() {
         let mongodb = db::MongoDB::default();
-        mongodb
-            .client
-            .database("test")
-            .collection::<Media>("anime")
-            .drop(None)
-            .await
-            .unwrap();
-        mongodb
-            .client
-            .database("test")
-            .collection::<Media>("manga")
-            .drop(None)
-            .await
-            .unwrap();
+        mongodb.client.database("test").drop(None).await.unwrap();
 
         let mut aggregator = Aggregator::default();
         aggregator.run().await.unwrap();

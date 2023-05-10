@@ -25,12 +25,12 @@ impl Default for MongoDB {
     fn default() -> MongoDB {
         let config = Config::default();
 
-        Self::new(config.db.mongodb)
+        Self::new(&config.db.mongodb)
     }
 }
 
 impl MongoDB {
-    pub fn new(config: MongoDBConfig) -> MongoDB {
+    pub fn new(config: &MongoDBConfig) -> MongoDB {
         let address = ServerAddress::parse(&config.host).unwrap();
         let hosts = vec![address];
         let options = ClientOptions::builder()
@@ -39,7 +39,10 @@ impl MongoDB {
             .build();
         let client = mongodb::Client::with_options(options).unwrap();
 
-        MongoDB { client, config }
+        MongoDB {
+            client,
+            config: config.clone(),
+        }
     }
 
     pub async fn upsert_documents<T>(&self, collection: &str, documents: &Vec<T>) -> Result<()>
@@ -86,16 +89,19 @@ impl Default for Redis {
     fn default() -> Redis {
         let config = Config::default();
 
-        Self::new(config.db.redis)
+        Self::new(&config.db.redis)
     }
 }
 
 impl Redis {
-    pub fn new(config: RedisConfig) -> Redis {
-        let host = &config.host.to_owned();
+    pub fn new(config: &RedisConfig) -> Redis {
+        let host = config.host.to_owned();
         let client = redis::Client::open(host.as_str()).unwrap();
 
-        Redis { client, config }
+        Redis {
+            client,
+            config: config.clone(),
+        }
     }
 
     async fn get<T>(&mut self, key: &str) -> Result<T>
@@ -153,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mongodb_new() {
-        let mongo = MongoDB::new(MongoDBConfig {
+        let mongo = MongoDB::new(&MongoDBConfig {
             host: "localhost".to_owned(),
             database: "database".to_owned(),
         });
@@ -203,7 +209,7 @@ mod tests {
 
     #[test]
     fn test_redis_new() {
-        let redis = Redis::new(RedisConfig {
+        let redis = Redis::new(&RedisConfig {
             host: "redis://localhost/".to_owned(),
         });
         assert_eq!(redis.config.host, "redis://localhost/");

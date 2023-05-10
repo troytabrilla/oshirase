@@ -85,13 +85,15 @@ impl Default for AniListAPI {
     fn default() -> AniListAPI {
         let config = Config::default();
 
-        AniListAPI::new(config)
+        AniListAPI::new(&config)
     }
 }
 
 impl AniListAPI {
-    pub fn new(config: Config) -> AniListAPI {
-        AniListAPI { config }
+    pub fn new(config: &Config) -> AniListAPI {
+        AniListAPI {
+            config: config.clone(),
+        }
     }
 
     fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
@@ -214,7 +216,7 @@ impl AniListAPI {
     }
 
     async fn check_cache(&self, user: &User) -> Result<MediaLists> {
-        let mut redis = db::Redis::new(self.config.db.redis.clone());
+        let mut redis = db::Redis::new(&self.config.db.redis);
         let key = Self::get_cache_key(user.id);
 
         let cached: MediaLists = redis.check_cache(&key).await?;
@@ -223,7 +225,7 @@ impl AniListAPI {
     }
 
     async fn cache_value(&self, user: &User, lists: &MediaLists) {
-        let mut redis = db::Redis::new(self.config.db.redis.clone());
+        let mut redis = db::Redis::new(&self.config.db.redis);
         let key = Self::get_cache_key(user.id);
 
         redis.cache_value_ex(&key, lists, 600).await;
@@ -237,6 +239,7 @@ impl Source for AniListAPI {
     async fn extract(&self) -> Result<MediaLists> {
         let user = self.fetch_user().await?;
 
+        // @todo Add option to skip cache
         match self.check_cache(&user).await {
             Ok(cached) => return Ok(cached),
             Err(err) => {
@@ -258,7 +261,7 @@ mod tests {
 
     #[test]
     fn test_anilist_api_new() {
-        let api = AniListAPI::new(Config {
+        let api = AniListAPI::new(&Config {
             anilist_api: AniListAPIConfig {
                 url: "url".to_owned(),
                 auth: AniListAPIAuthConfig {
