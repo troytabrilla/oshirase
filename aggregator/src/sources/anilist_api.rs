@@ -39,7 +39,7 @@ pub struct User {
     name: String,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Hash)]
 pub struct Media {
     pub media_id: Option<u64>,
     pub media_type: Option<String>,

@@ -1,3 +1,6 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use crate::config::{Config, MongoDBConfig, RedisConfig};
 use crate::Result;
 
@@ -5,7 +8,7 @@ use bson::to_document;
 use futures::future::try_join_all;
 use mongodb::{
     bson::doc,
-    options::{ClientOptions, ServerAddress, UpdateOptions},
+    options::{ClientOptions, FindOneAndUpdateOptions, ServerAddress},
 };
 use redis::AsyncCommands;
 #[allow(unused_imports)]
@@ -42,15 +45,9 @@ impl MongoDB {
         }
     }
 
-    pub async fn upsert_documents<T, F>(
-        &self,
-        collection: &str,
-        documents: &Vec<T>,
-        query: F,
-    ) -> Result<()>
+    pub async fn upsert_documents<T>(&self, collection: &str, documents: &Vec<T>) -> Result<()>
     where
-        T: Serialize,
-        F: Fn(&bson::Document) -> bson::Document,
+        T: std::fmt::Debug + DeserializeOwned + Serialize + Hash + Unpin + Send + Sync,
     {
         let database = self.client.database(&self.database);
         let collection = database.collection::<T>(collection);
@@ -58,13 +55,23 @@ impl MongoDB {
         let mut futures = Vec::new();
 
         for document in documents {
-            let document = to_document(document)?;
-            let query = query(&document);
-            futures.push(collection.update_one(
-                query.clone(),
-                doc! { "$set": document },
-                UpdateOptions::builder().upsert(true).build(),
-            ));
+            let mut hasher = DefaultHasher::new();
+            document.hash(&mut hasher);
+            let hash = hasher.finish();
+            let hash = format!("{:x}", hash);
+
+            let filter = doc! { "hash": &hash };
+            let existing = collection.find_one(filter.clone(), None).await?;
+
+            if existing.is_none() {
+                let mut document = to_document(document)?;
+                document.extend(doc! { "modified": chrono::offset::Local::now(), "hash": &hash });
+                futures.push(collection.find_one_and_update(
+                    filter.clone(),
+                    doc! { "$set": document },
+                    FindOneAndUpdateOptions::builder().upsert(true).build(),
+                ));
+            }
         }
 
         try_join_all(futures).await?;

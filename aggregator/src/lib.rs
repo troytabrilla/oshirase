@@ -1,4 +1,3 @@
-use mongodb::bson::doc;
 use std::{error::Error, fmt};
 use tokio::try_join;
 
@@ -88,11 +87,8 @@ impl Aggregator {
             None => return Err(AggregatorError::boxed("No lists to persist.")),
         };
 
-        // @todo Update query to only update if there are changes
-        let query = |doc: &bson::Document| doc! { "media_id": doc.get("media_id") };
-
-        let anime_future = mongodb.upsert_documents("anime", &lists.anime, query);
-        let manga_future = mongodb.upsert_documents("manga", &lists.manga, query);
+        let anime_future = mongodb.upsert_documents("anime", &lists.anime);
+        let manga_future = mongodb.upsert_documents("manga", &lists.manga);
 
         try_join!(anime_future, manga_future)?;
 
@@ -109,6 +105,7 @@ impl Aggregator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mongodb::bson::doc;
 
     #[tokio::test]
     async fn test_aggregator_run() {
