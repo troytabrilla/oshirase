@@ -12,6 +12,7 @@ use subsplease_scraper::*;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
+// @todo Consolidate errors (AniListError, SubsPleaseError, AggregatorError) into one error struct
 #[derive(Debug)]
 struct AggregatorError {
     message: String,
@@ -36,7 +37,7 @@ impl Error for AggregatorError {}
 #[derive(Debug)]
 pub struct Data {
     lists: MediaLists,
-    schedule: SubsPleaseSchedule,
+    schedule: Vec<AnimeSchedule>,
 }
 
 pub struct Aggregator {
@@ -74,7 +75,7 @@ impl Aggregator {
         }
     }
 
-    // @todo Add option to skip cache
+    // @todo Add option to skip cache (pub struct ExtractOptions;)
     async fn extract(&mut self) -> Result<&mut Self> {
         let lists = self.anilist_api.extract().await?;
         let schedule = self.subsplease_scraper.extract().await?;

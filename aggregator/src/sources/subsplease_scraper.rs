@@ -5,6 +5,28 @@ use crate::Result;
 use async_trait::async_trait;
 use headless_chrome::Browser;
 use scraper::{Html, Selector};
+use std::{error::Error, fmt, str::FromStr};
+
+#[derive(Debug)]
+struct SubsPleaseError {
+    message: String,
+}
+
+impl SubsPleaseError {
+    fn boxed(message: &str) -> Box<SubsPleaseError> {
+        Box::new(SubsPleaseError {
+            message: message.to_owned(),
+        })
+    }
+}
+
+impl fmt::Display for SubsPleaseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl Error for SubsPleaseError {}
 
 pub struct SubsPleaseScraper {
     config: SubsPleaseScraperConfig,
@@ -27,24 +49,42 @@ impl SubsPleaseScraper {
 }
 
 #[derive(Debug, Clone)]
-pub struct Anime {
-    pub title: String,
-    pub time: String,
+pub enum Day {
+    Sunday,
+    Monday,
+    Tuesday,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+}
+
+impl FromStr for Day {
+    type Err = Box<dyn Error>;
+
+    fn from_str(day: &str) -> Result<Day> {
+        match day {
+            "Sunday" => Ok(Day::Sunday),
+            "Monday" => Ok(Day::Monday),
+            "Tuesday" => Ok(Day::Tuesday),
+            "Wednesday" => Ok(Day::Wednesday),
+            "Thursday" => Ok(Day::Thursday),
+            "Friday" => Ok(Day::Friday),
+            "Saturday" => Ok(Day::Saturday),
+            _ => Err(SubsPleaseError::boxed("Invalid day.")),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
-pub struct Day {
-    pub name: String,
-    pub anime: Vec<Anime>,
-}
-
-#[derive(Debug)]
-pub struct SubsPleaseSchedule {
-    pub days: Vec<Day>,
+pub struct AnimeSchedule {
+    pub title: String,
+    pub day: Day,
+    pub time: String,
 }
 
 impl SubsPleaseScraper {
-    async fn scrape(&self) -> Result<SubsPleaseSchedule> {
+    async fn scrape(&self) -> Result<Vec<AnimeSchedule>> {
         let browser = Browser::default()?;
         let tab = browser.new_tab()?;
 
@@ -57,7 +97,8 @@ impl SubsPleaseScraper {
 
         let tr = Selector::parse("tr")?;
 
-        let mut days: Vec<Day> = Vec::new();
+        let mut days: Vec<AnimeSchedule> = Vec::new();
+        let mut current_day: Option<Day> = None;
 
         for element in table.select(&tr) {
             if let Some(class) = element.value().attr("class") {
@@ -65,10 +106,7 @@ impl SubsPleaseScraper {
                     let h2 = Selector::parse("h2")?;
                     let h2 = element.select(&h2).next();
                     if let Some(h2) = h2 {
-                        days.push(Day {
-                            name: h2.inner_html().to_owned(),
-                            anime: Vec::new(),
-                        });
+                        current_day = Day::from_str(&h2.inner_html()).ok();
                     }
                 } else if class == "all-schedule-item" {
                     let a = Selector::parse("a")?;
@@ -87,24 +125,26 @@ impl SubsPleaseScraper {
                         None => String::new(),
                     };
 
-                    if !title.is_empty() && !time.is_empty() && days.last().is_some() {
-                        let last = days.len() - 1;
-                        let day = &mut days[last];
-                        day.anime.push(Anime { title, time });
+                    if !title.is_empty() && !time.is_empty() && current_day.is_some() {
+                        days.push(AnimeSchedule {
+                            title,
+                            time,
+                            day: current_day.clone().unwrap(),
+                        });
                     }
                 }
             }
         }
 
-        Ok(SubsPleaseSchedule { days })
+        Ok(days)
     }
 }
 
 #[async_trait]
 impl Source for SubsPleaseScraper {
-    type Data = SubsPleaseSchedule;
+    type Data = Vec<AnimeSchedule>;
 
-    async fn extract(&self) -> Result<SubsPleaseSchedule> {
+    async fn extract(&self) -> Result<Vec<AnimeSchedule>> {
         // @todo Add caching (1 day)
         // @todo Add option to skip cache
         self.scrape().await
@@ -136,13 +176,13 @@ mod tests {
     async fn test_subsplease_scraper_scrape() {
         let scraper = SubsPleaseScraper::default();
         let actual = scraper.scrape().await.unwrap();
-        assert!(!actual.days.is_empty());
+        assert!(!actual.is_empty());
     }
 
     #[tokio::test]
     async fn test_subsplease_scraper_extract() {
         let api = SubsPleaseScraper::default();
         let actual = api.extract().await.unwrap();
-        assert!(!actual.days.is_empty());
+        assert!(!actual.is_empty());
     }
 }
