@@ -1,32 +1,12 @@
 use crate::config::{Config, SubsPleaseScraperConfig};
 use crate::sources::Source;
+use crate::CustomError;
 use crate::Result;
 
 use async_trait::async_trait;
 use headless_chrome::Browser;
 use scraper::{Html, Selector};
-use std::{error::Error, fmt, str::FromStr};
-
-#[derive(Debug)]
-struct SubsPleaseError {
-    message: String,
-}
-
-impl SubsPleaseError {
-    fn boxed(message: &str) -> Box<SubsPleaseError> {
-        Box::new(SubsPleaseError {
-            message: message.to_owned(),
-        })
-    }
-}
-
-impl fmt::Display for SubsPleaseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl Error for SubsPleaseError {}
+use std::{error::Error, str::FromStr};
 
 pub struct SubsPleaseScraper {
     config: SubsPleaseScraperConfig,
@@ -71,7 +51,7 @@ impl FromStr for Day {
             "Thursday" => Ok(Day::Thursday),
             "Friday" => Ok(Day::Friday),
             "Saturday" => Ok(Day::Saturday),
-            _ => Err(SubsPleaseError::boxed("Invalid day.")),
+            _ => Err(CustomError::boxed("Invalid day.")),
         }
     }
 }

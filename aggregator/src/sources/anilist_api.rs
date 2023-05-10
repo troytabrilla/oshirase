@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::db;
 use crate::sources::Source;
+use crate::CustomError;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -8,30 +9,8 @@ use graphql_client::GraphQLQuery;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::{error::Error, fmt};
 
 type Json = serde_json::Value;
-
-#[derive(Debug)]
-struct AniListError {
-    message: String,
-}
-
-impl AniListError {
-    fn boxed(message: &str) -> Box<AniListError> {
-        Box::new(AniListError {
-            message: message.to_owned(),
-        })
-    }
-}
-
-impl fmt::Display for AniListError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl Error for AniListError {}
 
 #[derive(Debug, PartialEq)]
 pub struct User {
@@ -129,11 +108,11 @@ impl AniListAPI {
         Ok(User {
             id: match Self::extract_value(&json, "/data/Viewer/id").as_u64() {
                 Some(id) => id,
-                None => return Err(AniListError::boxed("Could not find user ID.")),
+                None => return Err(CustomError::boxed("Could not find user ID.")),
             },
             name: match Self::extract_value(&json, "/data/Viewer/name").as_str() {
                 Some(name) => name.to_owned(),
-                None => return Err(AniListError::boxed("Could not find user name.")),
+                None => return Err(CustomError::boxed("Could not find user name.")),
             },
         })
     }
@@ -186,7 +165,7 @@ impl AniListAPI {
 
                 Ok(list)
             }
-            None => Err(Box::new(AniListError {
+            None => Err(Box::new(CustomError {
                 message: "No response to transform.".to_owned(),
             })),
         }

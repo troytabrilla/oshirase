@@ -12,27 +12,32 @@ use subsplease_scraper::*;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
-// @todo Consolidate errors (AniListError, SubsPleaseError, AggregatorError) into one error struct
 #[derive(Debug)]
-struct AggregatorError {
+pub struct CustomError {
     message: String,
 }
 
-impl AggregatorError {
-    fn boxed(message: &str) -> Box<AggregatorError> {
-        Box::new(AggregatorError {
+impl CustomError {
+    pub fn new(message: &str) -> CustomError {
+        CustomError {
             message: message.to_owned(),
-        })
+        }
     }
 }
 
-impl fmt::Display for AggregatorError {
+impl CustomError {
+    fn boxed(message: &str) -> Box<CustomError> {
+        Box::new(CustomError::new(message))
+    }
+}
+
+impl fmt::Display for CustomError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.message)
     }
 }
 
-impl Error for AggregatorError {}
+impl Error for CustomError {}
 
 #[derive(Debug)]
 pub struct Data {
@@ -95,7 +100,7 @@ impl Aggregator {
 
         let lists = match &self.data {
             Some(data) => &data.lists,
-            None => return Err(AggregatorError::boxed("No lists to persist.")),
+            None => return Err(CustomError::boxed("No lists to persist.")),
         };
 
         let anime_future = mongodb.upsert_documents("anime", &lists.anime);
