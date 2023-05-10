@@ -251,8 +251,6 @@ impl Source for AniListAPI {
     }
 }
 
-impl AniListAPI {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -275,6 +273,9 @@ mod tests {
                 redis: RedisConfig {
                     host: "host".to_owned(),
                 },
+            },
+            subsplease_scraper: SubsPleaseScraperConfig {
+                url: "url".to_owned(),
             },
         });
         assert_eq!(api.config.anilist_api.url, "url");

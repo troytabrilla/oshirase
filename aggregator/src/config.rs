@@ -30,9 +30,15 @@ pub struct DBConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct SubsPleaseScraperConfig {
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     pub anilist_api: AniListAPIConfig,
     pub db: DBConfig,
+    pub subsplease_scraper: SubsPleaseScraperConfig,
 }
 
 impl Config {
