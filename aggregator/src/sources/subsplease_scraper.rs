@@ -1,5 +1,3 @@
-use std::borrow::BorrowMut;
-
 use crate::config::{Config, SubsPleaseScraperConfig};
 use crate::sources::Source;
 use crate::Result;
