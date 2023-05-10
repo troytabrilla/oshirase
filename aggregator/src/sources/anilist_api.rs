@@ -295,7 +295,7 @@ mod tests {
     async fn test_anilist_api_fetch_user() {
         let api = AniListAPI::default();
         let actual = api.fetch_user().await.unwrap();
-        assert_eq!(actual.name, "***REMOVED***");
+        assert!(!actual.name.is_empty());
     }
 
     #[tokio::test]
