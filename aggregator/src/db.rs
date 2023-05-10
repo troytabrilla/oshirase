@@ -18,7 +18,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 pub struct MongoDB {
     pub client: mongodb::Client,
-    pub database: String,
+    pub config: MongoDBConfig,
 }
 
 impl Default for MongoDB {
@@ -31,7 +31,7 @@ impl Default for MongoDB {
 
 impl MongoDB {
     pub fn new(config: MongoDBConfig) -> MongoDB {
-        let address = ServerAddress::parse(config.host).unwrap();
+        let address = ServerAddress::parse(&config.host).unwrap();
         let hosts = vec![address];
         let options = ClientOptions::builder()
             .hosts(hosts)
@@ -39,17 +39,14 @@ impl MongoDB {
             .build();
         let client = mongodb::Client::with_options(options).unwrap();
 
-        MongoDB {
-            client,
-            database: config.database,
-        }
+        MongoDB { client, config }
     }
 
     pub async fn upsert_documents<T>(&self, collection: &str, documents: &Vec<T>) -> Result<()>
     where
         T: std::fmt::Debug + DeserializeOwned + Serialize + Hash + Unpin + Send + Sync,
     {
-        let database = self.client.database(&self.database);
+        let database = self.client.database(&self.config.database);
         let collection = database.collection::<T>(collection);
 
         let mut futures = Vec::new();
@@ -82,6 +79,7 @@ impl MongoDB {
 
 pub struct Redis {
     pub client: redis::Client,
+    pub config: RedisConfig,
 }
 
 impl Default for Redis {
@@ -94,9 +92,10 @@ impl Default for Redis {
 
 impl Redis {
     pub fn new(config: RedisConfig) -> Redis {
-        let client = redis::Client::open(config.host).unwrap();
+        let host = &config.host.to_owned();
+        let client = redis::Client::open(host.as_str()).unwrap();
 
-        Redis { client }
+        Redis { client, config }
     }
 
     async fn get<T>(&mut self, key: &str) -> Result<T>
@@ -150,6 +149,16 @@ impl Redis {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde::Deserialize;
+
+    #[tokio::test]
+    async fn test_mongodb_new() {
+        let mongo = MongoDB::new(MongoDBConfig {
+            host: "localhost".to_owned(),
+            database: "database".to_owned(),
+        });
+        assert_eq!(mongo.config.database, "database");
+    }
 
     #[tokio::test]
     async fn test_mongodb_default() {
@@ -158,6 +167,46 @@ mod tests {
         assert!(actual.contains(&"admin".to_owned()));
         assert!(actual.contains(&"config".to_owned()));
         assert!(actual.contains(&"local".to_owned()));
+    }
+
+    #[derive(Debug, Hash, PartialEq, Serialize, Deserialize)]
+    struct Test {
+        test: String,
+    }
+
+    #[tokio::test]
+    async fn test_mongodb_upsert_documents() {
+        let mongo = MongoDB::default();
+        let collection = mongo
+            .client
+            .database(&mongo.config.database)
+            .collection::<Test>("test");
+        collection.drop(None).await.unwrap();
+
+        mongo
+            .upsert_documents(
+                "test",
+                &vec![Test {
+                    test: "test".to_owned(),
+                }],
+            )
+            .await
+            .unwrap();
+
+        let count = collection
+            .count_documents(doc! { "test": "test" }, None)
+            .await
+            .unwrap();
+
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_redis_new() {
+        let redis = Redis::new(RedisConfig {
+            host: "redis://localhost/".to_owned(),
+        });
+        assert_eq!(redis.config.host, "redis://localhost/");
     }
 
     #[test]
@@ -173,7 +222,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_redis_cache() {
-        let key = "test_redis_set_and_get";
+        let key = "test_redis_cache";
         let mut redis = Redis::default();
         let expected = 420;
         redis.cache_value_ex(key, &expected, 10).await;
