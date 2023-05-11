@@ -7,13 +7,13 @@ use mongodb::{
     bson::doc,
     options::{ClientOptions, FindOneAndUpdateOptions, ServerAddress},
 };
-use redis::AsyncCommands;
 #[allow(unused_imports)]
-use redis::Commands;
-use redis::{FromRedisValue, ToRedisArgs};
+use redis::{AsyncCommands, Commands, FromRedisValue, ToRedisArgs};
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
 
 #[derive(Debug)]
 pub struct MongoDB {
@@ -66,7 +66,7 @@ impl MongoDB {
 
             if existing.is_none() {
                 let mut document = to_document(document)?;
-                document.extend(doc! { "modified": chrono::offset::Local::now(), "hash": &hash });
+                document.extend(doc! { "modified": bson::DateTime::now(), "hash": &hash });
 
                 futures.push(collection.find_one_and_update(
                     filter.clone(),
