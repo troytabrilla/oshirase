@@ -8,7 +8,7 @@ use mongodb::{
     options::{ClientOptions, FindOneAndUpdateOptions, ServerAddress},
 };
 #[allow(unused_imports)]
-use redis::{AsyncCommands, Commands, FromRedisValue, ToRedisArgs};
+use redis::{aio::ConnectionManager, AsyncCommands, Client, Commands, FromRedisValue, ToRedisArgs};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::hash_map::DefaultHasher,
@@ -17,7 +17,6 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-#[derive(Debug)]
 pub struct MongoDB {
     pub client: mongodb::Client,
     pub config: MongoDBConfig,
@@ -92,28 +91,29 @@ impl Default for MongoDB {
     }
 }
 
-#[derive(Debug)]
 pub struct Redis {
-    pub client: redis::Client,
+    pub client: Client,
+    pub connection_manager: ConnectionManager,
     pub config: RedisConfig,
 }
 
 impl Redis {
-    pub fn new(config: &RedisConfig) -> Redis {
-        let client = redis::Client::open(config.host.as_str()).unwrap();
+    pub async fn new(config: &RedisConfig) -> Redis {
+        let client = Client::open(config.host.as_str()).unwrap();
+        let connection_manager = client.get_tokio_connection_manager().await.unwrap();
 
         Redis {
             client,
+            connection_manager,
             config: config.clone(),
         }
     }
 
     async fn get<T>(&mut self, key: &str) -> Result<T>
     where
-        T: FromRedisValue + std::fmt::Debug,
+        T: FromRedisValue,
     {
-        let mut connection = self.client.get_async_connection().await?;
-        let result: T = connection.get(key).await?;
+        let result: T = self.connection_manager.get(key).await?;
 
         Ok(result)
     }
@@ -122,8 +122,9 @@ impl Redis {
     where
         T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
     {
-        let mut connection = self.client.get_async_connection().await?;
-        connection.set_ex(key, &(*value).clone(), seconds).await?;
+        self.connection_manager
+            .set_ex(key, &(*value).clone(), seconds)
+            .await?;
 
         Ok(())
     }
@@ -165,34 +166,17 @@ impl Redis {
     }
 }
 
-impl Default for Redis {
-    fn default() -> Redis {
-        let config = Config::default();
-
-        Self::new(&config.db.redis)
-    }
-}
-
-#[derive(Debug)]
 pub struct DB {
     pub mongodb: Arc<Mutex<MongoDB>>,
     pub redis: Arc<Mutex<Redis>>,
 }
 
 impl DB {
-    pub fn new(config: &DBConfig) -> DB {
+    pub async fn new(config: &DBConfig) -> DB {
         DB {
             mongodb: Arc::new(Mutex::new(MongoDB::new(&config.mongodb))),
-            redis: Arc::new(Mutex::new(Redis::new(&config.redis))),
+            redis: Arc::new(Mutex::new(Redis::new(&config.redis).await)),
         }
-    }
-}
-
-impl Default for DB {
-    fn default() -> DB {
-        let config = Config::default();
-
-        DB::new(&config.db)
     }
 }
 
@@ -219,7 +203,7 @@ mod tests {
         assert!(actual.contains(&"local".to_owned()));
     }
 
-    #[derive(Debug, Hash, PartialEq, Serialize, Deserialize)]
+    #[derive(Hash, PartialEq, Serialize, Deserialize)]
     struct Test {
         test: String,
     }
@@ -253,29 +237,20 @@ mod tests {
         assert_eq!(count, 1);
     }
 
-    #[test]
-    fn test_redis_new() {
+    #[tokio::test]
+    async fn test_redis_new() {
         let redis = Redis::new(&RedisConfig {
             host: "redis://localhost/".to_owned(),
-        });
+        })
+        .await;
         assert_eq!(redis.config.host, "redis://localhost/");
-    }
-
-    #[test]
-    fn test_redis_default() {
-        let key = "test_redis_default";
-        let redis = Redis::default();
-        let mut connection = redis.client.get_connection().unwrap();
-        let _: () = connection.set(key, 42).unwrap();
-        let actual: i32 = connection.get(key).unwrap();
-        let expected = 42;
-        assert_eq!(actual, expected);
     }
 
     #[tokio::test]
     async fn test_redis_cache() {
         let key = "test_redis_cache";
-        let mut redis = Redis::default();
+        let config = Config::default();
+        let mut redis = Redis::new(&config.db.redis).await;
         let expected = 420;
         redis.cache_value_ex(key, &expected, 10).await;
         let actual: i32 = redis.get_cached(key).await.unwrap();
@@ -292,14 +267,16 @@ mod tests {
             redis: RedisConfig {
                 host: "redis://localhost/".to_owned(),
             },
-        });
+        })
+        .await;
         assert_eq!(db.mongodb.lock().await.config.host, "host");
         assert_eq!(db.redis.lock().await.config.host, "redis://localhost/");
     }
 
     #[tokio::test]
     async fn test_db_default() {
-        let db = DB::default();
+        let config = Config::default();
+        let db = DB::new(&config.db).await;
         assert_eq!(db.mongodb.lock().await.config.host, "127.0.0.1");
         assert_eq!(db.redis.lock().await.config.host, "redis://127.0.0.1/");
     }

@@ -173,7 +173,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_subsplease_scraper_new() {
-        let redis = Arc::new(Mutex::new(Redis::default()));
+        let config = Config::default();
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let scraper: SubsPleaseScraper = SubsPleaseScraper {
             config: SubsPleaseScraperConfig {
                 url: "url".to_owned(),
@@ -186,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn test_subsplease_scraper_default() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::default()));
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let scraper: SubsPleaseScraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
         assert_eq!(scraper.config.url, "https://subsplease.org/schedule/");
     }
@@ -194,7 +195,7 @@ mod tests {
     #[tokio::test]
     async fn test_subsplease_scraper_scrape() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::default()));
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let scraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.0.is_empty());
@@ -203,7 +204,7 @@ mod tests {
     #[tokio::test]
     async fn test_subsplease_scraper_extract() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::default()));
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
         let options = ExtractOptions { dont_cache: true };
         let actual = scraper.extract(Some(&options)).await.unwrap();

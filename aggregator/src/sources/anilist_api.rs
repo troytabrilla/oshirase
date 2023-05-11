@@ -16,7 +16,7 @@ use tokio::sync::Mutex;
 
 type Json = serde_json::Value;
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct User {
     id: u64,
     name: String,
@@ -62,7 +62,6 @@ struct AniListUserQuery;
 )]
 struct AniListListQuery;
 
-#[derive(Debug)]
 pub struct AniListAPI {
     config: AniListAPIConfig,
     redis: Arc<Mutex<Redis>>,
@@ -251,7 +250,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_anilist_api_new() {
-        let redis = Arc::new(Mutex::new(Redis::default()));
+        let config = Config::default();
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let api = AniListAPI::new(
             &AniListAPIConfig {
                 url: "url".to_owned(),
@@ -268,7 +268,7 @@ mod tests {
     #[tokio::test]
     async fn test_anilist_api_fetch_user() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::default()));
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let api = AniListAPI::new(&config.anilist_api, redis);
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
@@ -277,7 +277,7 @@ mod tests {
     #[tokio::test]
     async fn test_anilist_api_fetch_lists() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::default()));
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let api = AniListAPI::new(&config.anilist_api, redis);
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
@@ -288,7 +288,7 @@ mod tests {
     #[tokio::test]
     async fn test_anilist_api_extract() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::default()));
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let mut api = AniListAPI::new(&config.anilist_api, redis);
         let options = ExtractOptions { dont_cache: true };
         let actual = api.extract(Some(&options)).await.unwrap();

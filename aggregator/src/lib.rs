@@ -38,7 +38,7 @@ impl fmt::Display for CustomError {
 
 impl Error for CustomError {}
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ExtractOptions {
     pub dont_cache: bool,
 }
@@ -59,8 +59,8 @@ pub struct Aggregator {
 }
 
 impl Aggregator {
-    pub fn new(config: &Config) -> Aggregator {
-        let db = DB::new(&config.db);
+    pub async fn new(config: &Config) -> Aggregator {
+        let db = DB::new(&config.db).await;
 
         Aggregator {
             config: config.clone(),
@@ -108,14 +108,6 @@ impl Aggregator {
     }
 }
 
-impl Default for Aggregator {
-    fn default() -> Aggregator {
-        let config = Config::default();
-
-        Aggregator::new(&config)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,7 +115,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_aggregator_run() {
-        let mongodb = db::MongoDB::default();
+        let config = Config::default();
+        let mongodb = MongoDB::new(&config.db.mongodb);
         let database = mongodb.client.database("test");
         database
             .collection::<Media>("anime")
@@ -136,7 +129,7 @@ mod tests {
             .await
             .unwrap();
 
-        let mut aggregator = Aggregator::default();
+        let mut aggregator = Aggregator::new(&config).await;
         let options = RunOptions {
             extract_options: Some(ExtractOptions { dont_cache: true }),
         };
