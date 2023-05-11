@@ -1,7 +1,4 @@
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-
-use crate::config::{Config, MongoDBConfig, RedisConfig};
+use crate::config::{Config, DBConfig, MongoDBConfig, RedisConfig};
 use crate::Result;
 
 use bson::to_document;
@@ -15,7 +12,10 @@ use redis::AsyncCommands;
 use redis::Commands;
 use redis::{FromRedisValue, ToRedisArgs};
 use serde::{de::DeserializeOwned, Serialize};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 
+#[derive(Debug)]
 pub struct MongoDB {
     pub client: mongodb::Client,
     pub config: MongoDBConfig,
@@ -80,6 +80,7 @@ impl MongoDB {
     }
 }
 
+#[derive(Debug)]
 pub struct Redis {
     pub client: redis::Client,
     pub config: RedisConfig,
@@ -152,6 +153,28 @@ impl Redis {
     }
 }
 
+#[derive(Debug)]
+pub struct DB {
+    pub mongodb: MongoDB,
+    pub redis: Redis,
+}
+
+impl DB {
+    pub fn new(config: &DBConfig) -> DB {
+        DB {
+            mongodb: MongoDB::new(&config.mongodb),
+            redis: Redis::new(&config.redis),
+        }
+    }
+}
+
+impl Default for DB {
+    fn default() -> DB {
+        let config = Config::default();
+        DB::new(&config.db)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,7 +183,7 @@ mod tests {
     #[tokio::test]
     async fn test_mongodb_new() {
         let mongo = MongoDB::new(&MongoDBConfig {
-            host: "localhost".to_owned(),
+            host: "127.0.0.1".to_owned(),
             database: "database".to_owned(),
         });
         assert_eq!(mongo.config.database, "database");
@@ -234,5 +257,27 @@ mod tests {
         redis.cache_value_ex(key, &expected, 10).await;
         let actual: i32 = redis.check_cache(key).await.unwrap();
         assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn test_db_new() {
+        let db = DB::new(&DBConfig {
+            mongodb: MongoDBConfig {
+                host: "host".to_owned(),
+                database: "database".to_owned(),
+            },
+            redis: RedisConfig {
+                host: "redis://localhost/".to_owned(),
+            },
+        });
+        assert_eq!(db.mongodb.config.host, "host");
+        assert_eq!(db.redis.config.host, "redis://localhost/");
+    }
+
+    #[tokio::test]
+    async fn test_db_default() {
+        let db = DB::default();
+        assert_eq!(db.mongodb.config.host, "127.0.0.1");
+        assert_eq!(db.redis.config.host, "redis://127.0.0.1/");
     }
 }

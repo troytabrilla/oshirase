@@ -55,15 +55,7 @@ pub struct Aggregator {
 impl Default for Aggregator {
     fn default() -> Aggregator {
         let config = Config::default();
-        let anilist_api = AniListAPI::default();
-        let subsplease_scraper = SubsPleaseScraper::default();
-
-        Aggregator {
-            anilist_api,
-            subsplease_scraper,
-            config,
-            data: None,
-        }
+        Aggregator::new(config)
     }
 }
 
