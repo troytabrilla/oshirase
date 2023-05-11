@@ -7,6 +7,7 @@ use crate::Result;
 
 use async_trait::async_trait;
 use headless_chrome::Browser;
+use scraper::ElementRef;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, str::FromStr, sync::Arc};
@@ -65,7 +66,7 @@ pub struct AnimeScheduleEntry {
 pub struct AnimeSchedule(Vec<AnimeScheduleEntry>);
 
 impl SubsPleaseScraper {
-    async fn scrape(&self) -> Result<AnimeSchedule> {
+    fn load_schedule_table(&self) -> Result<Html> {
         let browser = Browser::default()?;
         let tab = browser.new_tab()?;
 
@@ -76,35 +77,39 @@ impl SubsPleaseScraper {
         let table = tab.find_element("#full-schedule-table")?.get_content()?;
         let table = Html::parse_fragment(&table);
 
-        let tr = Selector::parse("tr")?;
+        Ok(table)
+    }
+
+    fn extract_inner_html(selector: &str, element: ElementRef) -> String {
+        let selector = Selector::parse(selector);
+        match selector {
+            Ok(selector) => match element.select(&selector).next() {
+                Some(elem) => elem.inner_html(),
+                None => String::new(),
+            },
+            Err(err) => {
+                println!("Could not parse selector: {}", err);
+                String::new()
+            }
+        }
+    }
+
+    async fn scrape(&self) -> Result<AnimeSchedule> {
+        let table = self.load_schedule_table()?;
 
         let mut days: AnimeSchedule = AnimeSchedule(Vec::new());
         let mut current_day: Option<Day> = None;
 
+        let tr = Selector::parse("tr")?;
+
         for element in table.select(&tr) {
             if let Some(class) = element.value().attr("class") {
                 if class == "day-of-week" {
-                    let h2 = Selector::parse("h2")?;
-                    let h2 = element.select(&h2).next();
-                    if let Some(h2) = h2 {
-                        current_day = Day::from_str(&h2.inner_html()).ok();
-                    }
+                    let day = Self::extract_inner_html("h2", element);
+                    current_day = Day::from_str(&day).ok();
                 } else if class == "all-schedule-item" {
-                    let a = Selector::parse("a")?;
-                    let a = element.select(&a).next();
-
-                    let title = match a {
-                        Some(a) => a.inner_html(),
-                        None => String::new(),
-                    };
-
-                    let td = Selector::parse(".all-schedule-time")?;
-                    let td = element.select(&td).next();
-
-                    let time = match td {
-                        Some(td) => td.inner_html(),
-                        None => String::new(),
-                    };
+                    let title = Self::extract_inner_html("a", element);
+                    let time = Self::extract_inner_html(".all-schedule-time", element);
 
                     if !title.is_empty() && !time.is_empty() && current_day.is_some() {
                         days.0.push(AnimeScheduleEntry {
