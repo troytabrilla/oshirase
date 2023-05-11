@@ -48,6 +48,7 @@ pub struct Data {
 
 pub struct Aggregator {
     config: Config,
+    db: Arc<Mutex<db::DB>>,
     data: Option<Data>,
 }
 
@@ -61,18 +62,20 @@ impl Default for Aggregator {
 
 impl Aggregator {
     pub fn new(config: &Config) -> Aggregator {
+        let db = Arc::new(Mutex::new(DB::new(&config.db)));
+
         Aggregator {
             config: config.clone(),
+            db,
             data: None,
         }
     }
 
     // @todo Add option to skip cache (pub struct ExtractOptions;)
     async fn extract(&mut self) -> Result<&mut Self> {
-        let db = Arc::new(Mutex::new(DB::new(&self.config.db)));
-        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, db.clone());
+        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, self.db.clone());
         let mut subsplease_scraper =
-            SubsPleaseScraper::new(&self.config.subsplease_scraper, db.clone());
+            SubsPleaseScraper::new(&self.config.subsplease_scraper, self.db.clone());
 
         let lists = anilist_api.extract().await?;
         let schedule = subsplease_scraper.extract().await?;
@@ -89,7 +92,7 @@ impl Aggregator {
     }
 
     async fn load(&self) -> Result<&Self> {
-        let mongodb = db::MongoDB::new(&self.config.db.mongodb);
+        let mongodb = &self.db.lock().await.mongodb;
 
         let lists = match &self.data {
             Some(data) => &data.lists,
