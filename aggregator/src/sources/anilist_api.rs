@@ -3,7 +3,6 @@ use crate::db::{Document, Redis};
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
-use crate::ExtractOptions;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -206,28 +205,21 @@ impl AniListAPI {
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<MediaLists> {
-        let user = self.fetch_user().await?;
-        let cache_key = format!("anilist_api:fetch_lists:{}", user.id);
-
-        let dont_cache = match options {
-            Some(options) => options.dont_cache,
-            None => false,
-        };
-
-        if !dont_cache {
-            if let Some(cached) = self.get_cached(&cache_key).await {
-                return Ok(cached);
+    async fn get_key(&self) -> String {
+        let user = self.fetch_user().await;
+        match user {
+            Ok(user) => format!("anilist_api:extract:{}", user.id),
+            Err(err) => {
+                println!("Could not get user for cache key: {}", err);
+                String::new()
             }
         }
+    }
 
-        let lists = self.fetch_lists(user.id).await?;
+    async fn get_data(&self) -> Result<MediaLists> {
+        let user = self.fetch_user().await?;
 
-        if !dont_cache {
-            self.cache_value(&cache_key, &lists).await;
-        }
-
-        Ok(lists)
+        self.fetch_lists(user.id).await
     }
 
     async fn get_cached(&mut self, key: &str) -> Option<MediaLists> {
@@ -247,6 +239,7 @@ impl Source for AniListAPI {
 mod tests {
     use super::*;
     use crate::config::*;
+    use crate::ExtractOptions;
 
     #[tokio::test]
     async fn test_anilist_api_new() {

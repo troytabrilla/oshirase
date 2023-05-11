@@ -2,7 +2,6 @@ use crate::config::SubsPleaseScraperConfig;
 use crate::db::Redis;
 use crate::sources::Source;
 use crate::CustomError;
-use crate::ExtractOptions;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -130,27 +129,12 @@ impl SubsPleaseScraper {
 impl Source for SubsPleaseScraper {
     type Data = AnimeSchedule;
 
-    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<AnimeSchedule> {
-        let cache_key = "subsplease_scraper";
+    async fn get_key(&self) -> String {
+        "subsplease_scraper:extract".to_owned()
+    }
 
-        let dont_cache = match options {
-            Some(options) => options.dont_cache,
-            None => false,
-        };
-
-        if !dont_cache {
-            if let Some(cached) = self.get_cached(cache_key).await {
-                return Ok(cached);
-            }
-        }
-
-        let schedule = self.scrape().await?;
-
-        if !dont_cache {
-            self.cache_value(cache_key, &schedule).await;
-        }
-
-        Ok(schedule)
+    async fn get_data(&self) -> Result<AnimeSchedule> {
+        self.scrape().await
     }
 
     async fn get_cached(&mut self, key: &str) -> Option<AnimeSchedule> {
@@ -170,6 +154,7 @@ impl Source for SubsPleaseScraper {
 mod tests {
     use super::*;
     use crate::config::*;
+    use crate::ExtractOptions;
 
     #[tokio::test]
     async fn test_subsplease_scraper_new() {
