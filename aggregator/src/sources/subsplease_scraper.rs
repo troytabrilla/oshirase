@@ -128,13 +128,22 @@ impl Source for SubsPleaseScraper {
     async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<AnimeSchedule> {
         let cache_key = "subsplease_scraper";
 
-        // @todo Add option to skip cache
-        if let Some(cached) = self.get_cached(cache_key).await {
-            return Ok(cached);
+        let dont_cache = match options {
+            Some(options) => options.dont_cache,
+            None => false,
+        };
+
+        if !dont_cache {
+            if let Some(cached) = self.get_cached(cache_key).await {
+                return Ok(cached);
+            }
         }
 
         let schedule = self.scrape().await?;
-        self.cache_value(cache_key, &schedule).await;
+
+        if !dont_cache {
+            self.cache_value(cache_key, &schedule).await;
+        }
 
         Ok(schedule)
     }
@@ -191,7 +200,8 @@ mod tests {
         let config = Config::default();
         let db = Arc::new(Mutex::new(DB::default()));
         let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, db);
-        let actual = scraper.extract(None).await.unwrap();
+        let options = ExtractOptions { dont_cache: true };
+        let actual = scraper.extract(Some(&options)).await.unwrap();
         assert!(!actual.0.is_empty());
     }
 }

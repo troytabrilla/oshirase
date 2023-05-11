@@ -196,13 +196,22 @@ impl Source for AniListAPI {
         let user = self.fetch_user().await?;
         let cache_key = format!("anilist_api:fetch_lists:{}", user.id);
 
-        // @todo Add option to skip cache
-        if let Some(cached) = self.get_cached(&cache_key).await {
-            return Ok(cached);
+        let dont_cache = match options {
+            Some(options) => options.dont_cache,
+            None => false,
+        };
+
+        if !dont_cache {
+            if let Some(cached) = self.get_cached(&cache_key).await {
+                return Ok(cached);
+            }
         }
 
         let lists = self.fetch_lists(user.id).await?;
-        self.cache_value(&cache_key, &lists).await;
+
+        if !dont_cache {
+            self.cache_value(&cache_key, &lists).await;
+        }
 
         Ok(lists)
     }
@@ -266,7 +275,8 @@ mod tests {
         let config = Config::default();
         let db = Arc::new(Mutex::new(DB::default()));
         let mut api = AniListAPI::new(&config.anilist_api, db);
-        let actual = api.extract(None).await.unwrap();
+        let options = ExtractOptions { dont_cache: true };
+        let actual = api.extract(Some(&options)).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

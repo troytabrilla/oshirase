@@ -91,7 +91,7 @@ impl Aggregator {
 
     async fn transform(&mut self, data: Data) -> Result<Data> {
         // @todo Combine data from sources into one result, i.e. update `latest` field, add schedule, etc
-        println!("{:#?}", data);
+        // println!("{:#?}", data);
         Ok(data)
     }
 
