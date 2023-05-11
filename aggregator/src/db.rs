@@ -13,7 +13,9 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    sync::Arc,
 };
+use tokio::sync::Mutex;
 
 #[derive(Debug)]
 pub struct MongoDB {
@@ -173,15 +175,15 @@ impl Default for Redis {
 
 #[derive(Debug)]
 pub struct DB {
-    pub mongodb: MongoDB,
-    pub redis: Redis,
+    pub mongodb: Arc<Mutex<MongoDB>>,
+    pub redis: Arc<Mutex<Redis>>,
 }
 
 impl DB {
     pub fn new(config: &DBConfig) -> DB {
         DB {
-            mongodb: MongoDB::new(&config.mongodb),
-            redis: Redis::new(&config.redis),
+            mongodb: Arc::new(Mutex::new(MongoDB::new(&config.mongodb))),
+            redis: Arc::new(Mutex::new(Redis::new(&config.redis))),
         }
     }
 }
@@ -291,14 +293,14 @@ mod tests {
                 host: "redis://localhost/".to_owned(),
             },
         });
-        assert_eq!(db.mongodb.config.host, "host");
-        assert_eq!(db.redis.config.host, "redis://localhost/");
+        assert_eq!(db.mongodb.lock().await.config.host, "host");
+        assert_eq!(db.redis.lock().await.config.host, "redis://localhost/");
     }
 
     #[tokio::test]
     async fn test_db_default() {
         let db = DB::default();
-        assert_eq!(db.mongodb.config.host, "127.0.0.1");
-        assert_eq!(db.redis.config.host, "redis://127.0.0.1/");
+        assert_eq!(db.mongodb.lock().await.config.host, "127.0.0.1");
+        assert_eq!(db.redis.lock().await.config.host, "redis://127.0.0.1/");
     }
 }

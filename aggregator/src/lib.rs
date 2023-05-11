@@ -8,8 +8,8 @@ use db::*;
 use sources::*;
 use subsplease_scraper::*;
 
-use std::{error::Error, fmt, sync::Arc};
-use tokio::{sync::Mutex, try_join};
+use std::{error::Error, fmt};
+use tokio::try_join;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -55,12 +55,12 @@ pub struct Data {
 
 pub struct Aggregator {
     config: Config,
-    db: Arc<Mutex<db::DB>>,
+    db: DB,
 }
 
 impl Aggregator {
     pub fn new(config: &Config) -> Aggregator {
-        let db = Arc::new(Mutex::new(DB::new(&config.db)));
+        let db = DB::new(&config.db);
 
         Aggregator {
             config: config.clone(),
@@ -69,9 +69,9 @@ impl Aggregator {
     }
 
     async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Data> {
-        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, self.db.clone());
+        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, self.db.redis.clone());
         let mut subsplease_scraper =
-            SubsPleaseScraper::new(&self.config.subsplease_scraper, self.db.clone());
+            SubsPleaseScraper::new(&self.config.subsplease_scraper, self.db.redis.clone());
 
         let lists = anilist_api.extract(options).await?;
         let schedule = subsplease_scraper.extract(options).await?;
@@ -86,7 +86,7 @@ impl Aggregator {
     }
 
     async fn load(&self, data: Data) -> Result<()> {
-        let mongodb = &self.db.lock().await.mongodb;
+        let mongodb = &self.db.mongodb.lock().await;
 
         let anime_future = mongodb.upsert_documents("anime", &data.lists.anime);
         let manga_future = mongodb.upsert_documents("manga", &data.lists.manga);

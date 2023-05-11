@@ -1,5 +1,5 @@
 use crate::config::AniListAPIConfig;
-use crate::db::{Document, DB};
+use crate::db::{Document, Redis};
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
@@ -65,14 +65,14 @@ struct AniListListQuery;
 #[derive(Debug)]
 pub struct AniListAPI {
     config: AniListAPIConfig,
-    db: Arc<Mutex<DB>>,
+    redis: Arc<Mutex<Redis>>,
 }
 
 impl AniListAPI {
-    pub fn new(config: &AniListAPIConfig, db: Arc<Mutex<DB>>) -> AniListAPI {
+    pub fn new(config: &AniListAPIConfig, redis: Arc<Mutex<Redis>>) -> AniListAPI {
         AniListAPI {
             config: config.clone(),
-            db,
+            redis,
         }
     }
 
@@ -232,13 +232,13 @@ impl Source for AniListAPI {
     }
 
     async fn get_cached(&mut self, key: &str) -> Option<MediaLists> {
-        let redis = &mut self.db.lock().await.redis;
+        let redis = &mut self.redis.lock().await;
 
         redis.get_cached(key).await
     }
 
     async fn cache_value(&mut self, key: &str, lists: &MediaLists) {
-        let redis = &mut self.db.lock().await.redis;
+        let redis = &mut self.redis.lock().await;
 
         redis.cache_value_ex(key, lists, 600).await;
     }
@@ -251,7 +251,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_anilist_api_new() {
-        let db = Arc::new(Mutex::new(DB::default()));
+        let redis = Arc::new(Mutex::new(Redis::default()));
         let api = AniListAPI::new(
             &AniListAPIConfig {
                 url: "url".to_owned(),
@@ -259,7 +259,7 @@ mod tests {
                     access_token: "access_token".to_owned(),
                 },
             },
-            db,
+            redis,
         );
         assert_eq!(api.config.url, "url");
         assert_eq!(api.config.auth.access_token, "access_token");
@@ -268,8 +268,8 @@ mod tests {
     #[tokio::test]
     async fn test_anilist_api_fetch_user() {
         let config = Config::default();
-        let db = Arc::new(Mutex::new(DB::default()));
-        let api = AniListAPI::new(&config.anilist_api, db);
+        let redis = Arc::new(Mutex::new(Redis::default()));
+        let api = AniListAPI::new(&config.anilist_api, redis);
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
     }
@@ -277,8 +277,8 @@ mod tests {
     #[tokio::test]
     async fn test_anilist_api_fetch_lists() {
         let config = Config::default();
-        let db = Arc::new(Mutex::new(DB::default()));
-        let api = AniListAPI::new(&config.anilist_api, db);
+        let redis = Arc::new(Mutex::new(Redis::default()));
+        let api = AniListAPI::new(&config.anilist_api, redis);
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -288,8 +288,8 @@ mod tests {
     #[tokio::test]
     async fn test_anilist_api_extract() {
         let config = Config::default();
-        let db = Arc::new(Mutex::new(DB::default()));
-        let mut api = AniListAPI::new(&config.anilist_api, db);
+        let redis = Arc::new(Mutex::new(Redis::default()));
+        let mut api = AniListAPI::new(&config.anilist_api, redis);
         let options = ExtractOptions { dont_cache: true };
         let actual = api.extract(Some(&options)).await.unwrap();
         assert!(!actual.anime.is_empty());
