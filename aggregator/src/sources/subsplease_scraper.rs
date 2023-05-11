@@ -26,7 +26,7 @@ impl SubsPleaseScraper {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub enum Day {
     Sunday,
     Monday,
@@ -54,7 +54,7 @@ impl FromStr for Day {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub struct AnimeScheduleEntry {
     pub title: String,
     pub day: Day,

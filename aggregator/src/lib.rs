@@ -24,9 +24,7 @@ impl CustomError {
             message: message.to_owned(),
         }
     }
-}
 
-impl CustomError {
     fn boxed(message: &str) -> Box<CustomError> {
         Box::new(CustomError::new(message))
     }
@@ -58,14 +56,6 @@ pub struct Data {
 pub struct Aggregator {
     config: Config,
     db: Arc<Mutex<db::DB>>,
-}
-
-impl Default for Aggregator {
-    fn default() -> Aggregator {
-        let config = Config::default();
-
-        Aggregator::new(&config)
-    }
 }
 
 impl Aggregator {
@@ -111,9 +101,18 @@ impl Aggregator {
             Some(options) => options.extract_options,
             None => None,
         };
+
         let data = self.extract(extract_options.as_ref()).await?;
         let data = self.transform(data).await?;
         self.load(data).await
+    }
+}
+
+impl Default for Aggregator {
+    fn default() -> Aggregator {
+        let config = Config::default();
+
+        Aggregator::new(&config)
     }
 }
 

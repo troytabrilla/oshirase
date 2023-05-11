@@ -1,6 +1,7 @@
 use crate::config::AniListAPIConfig;
-use crate::db::DB;
+use crate::db::{Document, DB};
 use crate::sources::Source;
+use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
 use crate::ExtractOptions;
 use crate::Result;
@@ -36,7 +37,10 @@ pub struct Media {
     pub score: Option<u64>,
     pub progress: Option<u64>,
     pub latest: Option<u64>,
+    pub schedule: Option<AnimeScheduleEntry>,
 }
+
+impl Document for Media {}
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct MediaLists {
@@ -72,8 +76,22 @@ impl AniListAPI {
         }
     }
 
-    fn extract_value<'b>(json: &'b Json, key: &str) -> &'b Json {
+    fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
         json.pointer(key).unwrap_or(&Json::Null)
+    }
+
+    fn extract_value_as_array<'a>(json: &'a Json, key: &str) -> Option<&'a Vec<Json>> {
+        Self::extract_value(json, key).as_array()
+    }
+
+    fn extract_value_as_u64(json: &Json, key: &str) -> Option<u64> {
+        Self::extract_value(json, key).as_u64()
+    }
+
+    fn extract_value_as_string(json: &Json, key: &str) -> Option<String> {
+        Self::extract_value(json, key)
+            .as_str()
+            .map(ToOwned::to_owned)
     }
 
     async fn fetch<T>(&self, body: &T) -> Result<Json>
@@ -103,12 +121,12 @@ impl AniListAPI {
         let json = self.fetch(&body).await?;
 
         Ok(User {
-            id: match Self::extract_value(&json, "/data/Viewer/id").as_u64() {
+            id: match Self::extract_value_as_u64(&json, "/data/Viewer/id") {
                 Some(id) => id,
                 None => return Err(CustomError::boxed("Could not find user ID.")),
             },
-            name: match Self::extract_value(&json, "/data/Viewer/name").as_str() {
-                Some(name) => name.to_owned(),
+            name: match Self::extract_value_as_string(&json, "/data/Viewer/name") {
+                Some(name) => name,
                 None => return Err(CustomError::boxed("Could not find user name.")),
             },
         })
@@ -119,38 +137,35 @@ impl AniListAPI {
             Some(json) => {
                 let list: Vec<Media> =
                     json.iter().fold(Vec::new() as Vec<Media>, |mut acc, list| {
-                        if let Some(entries) = Self::extract_value(list, "/entries").as_array() {
+                        if let Some(entries) = Self::extract_value_as_array(list, "/entries") {
                             for entry in entries {
                                 let media = Media {
-                                    media_id: Self::extract_value(entry, "/media/id").as_u64(),
-                                    media_type: Self::extract_value(entry, "/media/type")
-                                        .as_str()
-                                        .map(ToOwned::to_owned),
-                                    status: Self::extract_value(entry, "/status")
-                                        .as_str()
-                                        .map(ToOwned::to_owned),
-                                    format: Self::extract_value(entry, "/media/format")
-                                        .as_str()
-                                        .map(ToOwned::to_owned),
-                                    season: Self::extract_value(entry, "/media/season")
-                                        .as_str()
-                                        .map(ToOwned::to_owned),
-                                    season_year: Self::extract_value(entry, "/media/seasonYear")
-                                        .as_u64(),
-                                    title: Self::extract_value(entry, "/media/title/romaji")
-                                        .as_str()
-                                        .map(ToOwned::to_owned),
-                                    alt_title: Self::extract_value(entry, "/media/title/english")
-                                        .as_str()
-                                        .map(ToOwned::to_owned),
-                                    image: Self::extract_value(entry, "/media/coverImage/large")
-                                        .as_str()
-                                        .map(ToOwned::to_owned),
-                                    episodes: Self::extract_value(entry, "/media/episodes")
-                                        .as_u64(),
-                                    score: Self::extract_value(entry, "/score").as_u64(),
-                                    progress: Self::extract_value(entry, "/progress").as_u64(),
+                                    media_id: Self::extract_value_as_u64(entry, "/media/id"),
+                                    media_type: Self::extract_value_as_string(entry, "/media/type"),
+                                    status: Self::extract_value_as_string(entry, "/status"),
+                                    format: Self::extract_value_as_string(entry, "/media/format"),
+                                    season: Self::extract_value_as_string(entry, "/media/season"),
+                                    season_year: Self::extract_value_as_u64(
+                                        entry,
+                                        "/media/seasonYear",
+                                    ),
+                                    title: Self::extract_value_as_string(
+                                        entry,
+                                        "/media/title/romaji",
+                                    ),
+                                    alt_title: Self::extract_value_as_string(
+                                        entry,
+                                        "/media/title/english",
+                                    ),
+                                    image: Self::extract_value_as_string(
+                                        entry,
+                                        "/media/coverImage/large",
+                                    ),
+                                    episodes: Self::extract_value_as_u64(entry, "/media/episodes"),
+                                    score: Self::extract_value_as_u64(entry, "/score"),
+                                    progress: Self::extract_value_as_u64(entry, "/progress"),
                                     latest: None,
+                                    schedule: None,
                                 };
 
                                 acc.push(media);
@@ -176,10 +191,10 @@ impl AniListAPI {
 
         let json = self.fetch(&body).await?;
 
-        let anime = Self::extract_value(&json, "/data/anime/lists").as_array();
+        let anime = Self::extract_value_as_array(&json, "/data/anime/lists");
         let anime = self.transform(anime)?;
 
-        let manga = Self::extract_value(&json, "/data/manga/lists").as_array();
+        let manga = Self::extract_value_as_array(&json, "/data/manga/lists");
         let manga = self.transform(manga)?;
 
         let lists = MediaLists { anime, manga };

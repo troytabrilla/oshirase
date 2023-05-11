@@ -21,13 +21,7 @@ pub struct MongoDB {
     pub config: MongoDBConfig,
 }
 
-impl Default for MongoDB {
-    fn default() -> MongoDB {
-        let config = Config::default();
-
-        Self::new(&config.db.mongodb)
-    }
-}
+pub trait Document: DeserializeOwned + Serialize + Hash + Unpin + Send + Sync {}
 
 impl MongoDB {
     pub fn new(config: &MongoDBConfig) -> MongoDB {
@@ -45,9 +39,19 @@ impl MongoDB {
         }
     }
 
+    fn hash_document<T>(document: &T) -> String
+    where
+        T: Document,
+    {
+        let mut hasher = DefaultHasher::new();
+        document.hash(&mut hasher);
+        let hash = hasher.finish();
+        format!("{:x}", hash)
+    }
+
     pub async fn upsert_documents<T>(&self, collection: &str, documents: &Vec<T>) -> Result<()>
     where
-        T: std::fmt::Debug + DeserializeOwned + Serialize + Hash + Unpin + Send + Sync,
+        T: Document,
     {
         let database = self.client.database(&self.config.database);
         let collection = database.collection::<T>(collection);
@@ -55,10 +59,7 @@ impl MongoDB {
         let mut futures = Vec::new();
 
         for document in documents {
-            let mut hasher = DefaultHasher::new();
-            document.hash(&mut hasher);
-            let hash = hasher.finish();
-            let hash = format!("{:x}", hash);
+            let hash = Self::hash_document(document);
 
             let filter = doc! { "hash": &hash };
             let existing = collection.find_one(filter.clone(), None).await?;
@@ -66,6 +67,7 @@ impl MongoDB {
             if existing.is_none() {
                 let mut document = to_document(document)?;
                 document.extend(doc! { "modified": chrono::offset::Local::now(), "hash": &hash });
+
                 futures.push(collection.find_one_and_update(
                     filter.clone(),
                     doc! { "$set": document },
@@ -80,24 +82,23 @@ impl MongoDB {
     }
 }
 
+impl Default for MongoDB {
+    fn default() -> MongoDB {
+        let config = Config::default();
+
+        Self::new(&config.db.mongodb)
+    }
+}
+
 #[derive(Debug)]
 pub struct Redis {
     pub client: redis::Client,
     pub config: RedisConfig,
 }
 
-impl Default for Redis {
-    fn default() -> Redis {
-        let config = Config::default();
-
-        Self::new(&config.db.redis)
-    }
-}
-
 impl Redis {
     pub fn new(config: &RedisConfig) -> Redis {
-        let host = config.host.to_owned();
-        let client = redis::Client::open(host.as_str()).unwrap();
+        let client = redis::Client::open(config.host.as_str()).unwrap();
 
         Redis {
             client,
@@ -162,6 +163,14 @@ impl Redis {
     }
 }
 
+impl Default for Redis {
+    fn default() -> Redis {
+        let config = Config::default();
+
+        Self::new(&config.db.redis)
+    }
+}
+
 #[derive(Debug)]
 pub struct DB {
     pub mongodb: MongoDB,
@@ -180,6 +189,7 @@ impl DB {
 impl Default for DB {
     fn default() -> DB {
         let config = Config::default();
+
         DB::new(&config.db)
     }
 }
@@ -211,6 +221,8 @@ mod tests {
     struct Test {
         test: String,
     }
+
+    impl Document for Test {}
 
     #[tokio::test]
     async fn test_mongodb_upsert_documents() {
