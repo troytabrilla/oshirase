@@ -2,6 +2,7 @@ use crate::config::SubsPleaseScraperConfig;
 use crate::db::DB;
 use crate::sources::Source;
 use crate::CustomError;
+use crate::ExtractOptions;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -124,7 +125,7 @@ impl SubsPleaseScraper {
 impl Source for SubsPleaseScraper {
     type Data = AnimeSchedule;
 
-    async fn extract(&mut self) -> Result<AnimeSchedule> {
+    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<AnimeSchedule> {
         let cache_key = "subsplease_scraper";
 
         // @todo Add option to skip cache
@@ -190,7 +191,7 @@ mod tests {
         let config = Config::default();
         let db = Arc::new(Mutex::new(DB::default()));
         let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, db);
-        let actual = scraper.extract().await.unwrap();
+        let actual = scraper.extract(None).await.unwrap();
         assert!(!actual.0.is_empty());
     }
 }

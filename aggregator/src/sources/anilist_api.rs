@@ -2,6 +2,7 @@ use crate::config::AniListAPIConfig;
 use crate::db::DB;
 use crate::sources::Source;
 use crate::CustomError;
+use crate::ExtractOptions;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -191,7 +192,7 @@ impl AniListAPI {
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn extract(&mut self) -> Result<MediaLists> {
+    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<MediaLists> {
         let user = self.fetch_user().await?;
         let cache_key = format!("anilist_api:fetch_lists:{}", user.id);
 
@@ -265,7 +266,7 @@ mod tests {
         let config = Config::default();
         let db = Arc::new(Mutex::new(DB::default()));
         let mut api = AniListAPI::new(&config.anilist_api, db);
-        let actual = api.extract().await.unwrap();
+        let actual = api.extract(None).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

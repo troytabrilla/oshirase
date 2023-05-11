@@ -40,6 +40,15 @@ impl fmt::Display for CustomError {
 
 impl Error for CustomError {}
 
+#[derive(Debug, Clone)]
+pub struct ExtractOptions {
+    pub dont_cache: bool,
+}
+
+pub struct RunOptions {
+    pub extract_options: Option<ExtractOptions>,
+}
+
 #[derive(Debug)]
 pub struct Data {
     lists: MediaLists,
@@ -49,7 +58,6 @@ pub struct Data {
 pub struct Aggregator {
     config: Config,
     db: Arc<Mutex<db::DB>>,
-    data: Option<Data>,
 }
 
 impl Default for Aggregator {
@@ -67,50 +75,45 @@ impl Aggregator {
         Aggregator {
             config: config.clone(),
             db,
-            data: None,
         }
     }
 
-    // @todo Add option to skip cache (pub struct ExtractOptions;)
-    async fn extract(&mut self) -> Result<&mut Self> {
+    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Data> {
         let mut anilist_api = AniListAPI::new(&self.config.anilist_api, self.db.clone());
         let mut subsplease_scraper =
             SubsPleaseScraper::new(&self.config.subsplease_scraper, self.db.clone());
 
-        let lists = anilist_api.extract().await?;
-        let schedule = subsplease_scraper.extract().await?;
+        let lists = anilist_api.extract(options).await?;
+        let schedule = subsplease_scraper.extract(options).await?;
 
-        self.data = Some(Data { lists, schedule });
-
-        Ok(self)
+        Ok(Data { lists, schedule })
     }
 
-    async fn transform(&mut self) -> Result<&mut Self> {
+    async fn transform(&mut self, data: Data) -> Result<Data> {
         // @todo Combine data from sources into one result, i.e. update `latest` field, add schedule, etc
-        println!("{:#?}", self.data);
-        Ok(self)
+        println!("{:#?}", data);
+        Ok(data)
     }
 
-    async fn load(&self) -> Result<&Self> {
+    async fn load(&self, data: Data) -> Result<()> {
         let mongodb = &self.db.lock().await.mongodb;
 
-        let lists = match &self.data {
-            Some(data) => &data.lists,
-            None => return Err(CustomError::boxed("No lists to persist.")),
-        };
-
-        let anime_future = mongodb.upsert_documents("anime", &lists.anime);
-        let manga_future = mongodb.upsert_documents("manga", &lists.manga);
+        let anime_future = mongodb.upsert_documents("anime", &data.lists.anime);
+        let manga_future = mongodb.upsert_documents("manga", &data.lists.manga);
 
         try_join!(anime_future, manga_future)?;
 
-        Ok(self)
+        Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<()> {
-        self.extract().await?.transform().await?.load().await?;
-
-        Ok(())
+    pub async fn run(&mut self, options: Option<RunOptions>) -> Result<()> {
+        let extract_options = match options {
+            Some(options) => options.extract_options,
+            None => None,
+        };
+        let data = self.extract(extract_options.as_ref()).await?;
+        let data = self.transform(data).await?;
+        self.load(data).await
     }
 }
 
@@ -135,7 +138,10 @@ mod tests {
             .unwrap();
 
         let mut aggregator = Aggregator::default();
-        aggregator.run().await.unwrap();
+        let options = RunOptions {
+            extract_options: Some(ExtractOptions { dont_cache: true }),
+        };
+        aggregator.run(Some(options)).await.unwrap();
 
         let anime: bson::Document = mongodb
             .client

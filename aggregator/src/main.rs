@@ -15,7 +15,7 @@ async fn main() -> Result<()> {
         Config::from_file(&args[1])
     };
 
-    Aggregator::new(&config).run().await?;
+    Aggregator::new(&config).run(None).await?;
 
     Ok(())
 }
