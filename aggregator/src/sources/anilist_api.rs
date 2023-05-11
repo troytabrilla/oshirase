@@ -1,5 +1,5 @@
-use crate::config::Config;
-use crate::db;
+use crate::config::AniListAPIConfig;
+use crate::db::DB;
 use crate::sources::Source;
 use crate::CustomError;
 use crate::Result;
@@ -9,6 +9,8 @@ use graphql_client::GraphQLQuery;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 type Json = serde_json::Value;
 
@@ -57,25 +59,19 @@ struct AniListListQuery;
 
 #[derive(Debug)]
 pub struct AniListAPI {
-    config: Config,
-}
-
-impl Default for AniListAPI {
-    fn default() -> AniListAPI {
-        let config = Config::default();
-
-        AniListAPI::new(&config)
-    }
+    config: AniListAPIConfig,
+    db: Arc<Mutex<DB>>,
 }
 
 impl AniListAPI {
-    pub fn new(config: &Config) -> AniListAPI {
+    pub fn new(config: &AniListAPIConfig, db: Arc<Mutex<DB>>) -> AniListAPI {
         AniListAPI {
             config: config.clone(),
+            db,
         }
     }
 
-    fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
+    fn extract_value<'b>(json: &'b Json, key: &str) -> &'b Json {
         json.pointer(key).unwrap_or(&Json::Null)
     }
 
@@ -85,10 +81,10 @@ impl AniListAPI {
     {
         let client = reqwest::Client::new();
         let json = client
-            .post(self.config.anilist_api.url.as_str())
+            .post(self.config.url.as_str())
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.config.anilist_api.auth.access_token),
+                format!("Bearer {}", self.config.auth.access_token),
             )
             .json(&body)
             .send()
@@ -194,8 +190,8 @@ impl AniListAPI {
         format!("anilist_api:fetch_lists:{}", user_id)
     }
 
-    async fn check_cache(&self, user: &User) -> Result<MediaLists> {
-        let mut redis = db::Redis::new(&self.config.db.redis);
+    async fn check_cache(&mut self, user: &User) -> Result<MediaLists> {
+        let redis = &mut self.db.lock().await.redis;
         let key = Self::get_cache_key(user.id);
 
         let cached: MediaLists = redis.check_cache(&key).await?;
@@ -203,8 +199,8 @@ impl AniListAPI {
         Ok(cached)
     }
 
-    async fn cache_value(&self, user: &User, lists: &MediaLists) {
-        let mut redis = db::Redis::new(&self.config.db.redis);
+    async fn cache_value(&mut self, user: &User, lists: &MediaLists) {
+        let redis = &mut self.db.lock().await.redis;
         let key = Self::get_cache_key(user.id);
 
         redis.cache_value_ex(&key, lists, 600).await;
@@ -215,7 +211,7 @@ impl AniListAPI {
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn extract(&self) -> Result<MediaLists> {
+    async fn extract(&mut self) -> Result<MediaLists> {
         let user = self.fetch_user().await?;
 
         // @todo Add option to skip cache
@@ -238,48 +234,36 @@ mod tests {
     use super::*;
     use crate::config::*;
 
-    #[test]
-    fn test_anilist_api_new() {
-        let api = AniListAPI::new(&Config {
-            anilist_api: AniListAPIConfig {
+    #[tokio::test]
+    async fn test_anilist_api_new() {
+        let db = Arc::new(Mutex::new(DB::default()));
+        let api = AniListAPI::new(
+            &AniListAPIConfig {
                 url: "url".to_owned(),
                 auth: AniListAPIAuthConfig {
                     access_token: "access_token".to_owned(),
                 },
             },
-            db: DBConfig {
-                mongodb: MongoDBConfig {
-                    host: "host".to_owned(),
-                    database: "database".to_owned(),
-                },
-                redis: RedisConfig {
-                    host: "host".to_owned(),
-                },
-            },
-            subsplease_scraper: SubsPleaseScraperConfig {
-                url: "url".to_owned(),
-            },
-        });
-        assert_eq!(api.config.anilist_api.url, "url");
-        assert_eq!(api.config.anilist_api.auth.access_token, "access_token");
-    }
-
-    #[test]
-    fn test_anilist_api_default() {
-        let api = AniListAPI::default();
-        assert_eq!(api.config.anilist_api.url, "https://graphql.anilist.co");
+            db,
+        );
+        assert_eq!(api.config.url, "url");
+        assert_eq!(api.config.auth.access_token, "access_token");
     }
 
     #[tokio::test]
     async fn test_anilist_api_fetch_user() {
-        let api = AniListAPI::default();
+        let config = Config::default();
+        let db = Arc::new(Mutex::new(DB::default()));
+        let api = AniListAPI::new(&config.anilist_api, db);
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
     }
 
     #[tokio::test]
     async fn test_anilist_api_fetch_lists() {
-        let api = AniListAPI::default();
+        let config = Config::default();
+        let db = Arc::new(Mutex::new(DB::default()));
+        let api = AniListAPI::new(&config.anilist_api, db);
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -288,7 +272,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_anilist_api_extract() {
-        let api = AniListAPI::default();
+        let config = Config::default();
+        let db = Arc::new(Mutex::new(DB::default()));
+        let mut api = AniListAPI::new(&config.anilist_api, db);
         let actual = api.extract().await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());

@@ -1,4 +1,5 @@
-use crate::config::{Config, SubsPleaseScraperConfig};
+use crate::config::SubsPleaseScraperConfig;
+use crate::db::DB;
 use crate::sources::Source;
 use crate::CustomError;
 use crate::Result;
@@ -6,24 +7,19 @@ use crate::Result;
 use async_trait::async_trait;
 use headless_chrome::Browser;
 use scraper::{Html, Selector};
-use std::{error::Error, str::FromStr};
+use std::{error::Error, str::FromStr, sync::Arc};
+use tokio::sync::Mutex;
 
 pub struct SubsPleaseScraper {
     config: SubsPleaseScraperConfig,
-}
-
-impl Default for SubsPleaseScraper {
-    fn default() -> SubsPleaseScraper {
-        let config = Config::default();
-
-        SubsPleaseScraper::new(&config.subsplease_scraper)
-    }
+    db: Arc<Mutex<DB>>,
 }
 
 impl SubsPleaseScraper {
-    pub fn new(config: &SubsPleaseScraperConfig) -> SubsPleaseScraper {
+    pub fn new(config: &SubsPleaseScraperConfig, db: Arc<Mutex<DB>>) -> SubsPleaseScraper {
         SubsPleaseScraper {
             config: config.clone(),
+            db,
         }
     }
 }
@@ -124,7 +120,7 @@ impl SubsPleaseScraper {
 impl Source for SubsPleaseScraper {
     type Data = Vec<AnimeSchedule>;
 
-    async fn extract(&self) -> Result<Vec<AnimeSchedule>> {
+    async fn extract(&mut self) -> Result<Vec<AnimeSchedule>> {
         // @todo Add caching (1 day)
         // @todo Add option to skip cache
         self.scrape().await
@@ -136,33 +132,41 @@ mod tests {
     use super::*;
     use crate::config::*;
 
-    #[test]
-    fn test_subsplease_scraper_new() {
+    #[tokio::test]
+    async fn test_subsplease_scraper_new() {
+        let db = Arc::new(Mutex::new(DB::default()));
         let scraper: SubsPleaseScraper = SubsPleaseScraper {
             config: SubsPleaseScraperConfig {
                 url: "url".to_owned(),
             },
+            db,
         };
         assert_eq!(scraper.config.url, "url");
     }
 
-    #[test]
-    fn test_subsplease_scraper_default() {
-        let scraper: SubsPleaseScraper = SubsPleaseScraper::default();
+    #[tokio::test]
+    async fn test_subsplease_scraper_default() {
+        let config = Config::default();
+        let db = Arc::new(Mutex::new(DB::default()));
+        let scraper: SubsPleaseScraper = SubsPleaseScraper::new(&config.subsplease_scraper, db);
         assert_eq!(scraper.config.url, "https://subsplease.org/schedule/");
     }
 
     #[tokio::test]
     async fn test_subsplease_scraper_scrape() {
-        let scraper = SubsPleaseScraper::default();
+        let config = Config::default();
+        let db = Arc::new(Mutex::new(DB::default()));
+        let scraper = SubsPleaseScraper::new(&config.subsplease_scraper, db);
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.is_empty());
     }
 
     #[tokio::test]
     async fn test_subsplease_scraper_extract() {
-        let api = SubsPleaseScraper::default();
-        let actual = api.extract().await.unwrap();
+        let config = Config::default();
+        let db = Arc::new(Mutex::new(DB::default()));
+        let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, db);
+        let actual = scraper.extract().await.unwrap();
         assert!(!actual.is_empty());
     }
 }

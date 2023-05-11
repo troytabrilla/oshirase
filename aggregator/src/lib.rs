@@ -1,14 +1,15 @@
-use std::{error::Error, fmt};
-use tokio::try_join;
-
 pub mod config;
 mod db;
 mod sources;
 
 use anilist_api::*;
-use config::Config;
+use config::*;
+use db::*;
 use sources::*;
 use subsplease_scraper::*;
+
+use std::{error::Error, fmt, sync::Arc};
+use tokio::{sync::Mutex, try_join};
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
@@ -46,8 +47,6 @@ pub struct Data {
 }
 
 pub struct Aggregator {
-    anilist_api: AniListAPI,
-    subsplease_scraper: SubsPleaseScraper,
     config: Config,
     data: Option<Data>,
 }
@@ -55,27 +54,28 @@ pub struct Aggregator {
 impl Default for Aggregator {
     fn default() -> Aggregator {
         let config = Config::default();
-        Aggregator::new(config)
+
+        Aggregator::new(&config)
     }
 }
 
 impl Aggregator {
-    pub fn new(config: Config) -> Aggregator {
-        let anilist_api = AniListAPI::new(&config);
-        let subsplease_scraper = SubsPleaseScraper::new(&config.subsplease_scraper);
-
+    pub fn new(config: &Config) -> Aggregator {
         Aggregator {
-            anilist_api,
-            subsplease_scraper,
-            config,
+            config: config.clone(),
             data: None,
         }
     }
 
     // @todo Add option to skip cache (pub struct ExtractOptions;)
     async fn extract(&mut self) -> Result<&mut Self> {
-        let lists = self.anilist_api.extract().await?;
-        let schedule = self.subsplease_scraper.extract().await?;
+        let db = Arc::new(Mutex::new(DB::new(&self.config.db)));
+        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, db.clone());
+        let mut subsplease_scraper =
+            SubsPleaseScraper::new(&self.config.subsplease_scraper, db.clone());
+
+        let lists = anilist_api.extract().await?;
+        let schedule = subsplease_scraper.extract().await?;
 
         self.data = Some(Data { lists, schedule });
 
@@ -118,7 +118,17 @@ mod tests {
     #[tokio::test]
     async fn test_aggregator_run() {
         let mongodb = db::MongoDB::default();
-        mongodb.client.database("test").drop(None).await.unwrap();
+        let database = mongodb.client.database("test");
+        database
+            .collection::<Media>("anime")
+            .drop(None)
+            .await
+            .unwrap();
+        database
+            .collection::<Media>("manga")
+            .drop(None)
+            .await
+            .unwrap();
 
         let mut aggregator = Aggregator::default();
         aggregator.run().await.unwrap();
