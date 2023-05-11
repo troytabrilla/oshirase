@@ -43,7 +43,7 @@ impl Error for CustomError {}
 #[derive(Debug)]
 pub struct Data {
     lists: MediaLists,
-    schedule: Vec<AnimeSchedule>,
+    schedule: AnimeSchedule,
 }
 
 pub struct Aggregator {
@@ -83,7 +83,8 @@ impl Aggregator {
     }
 
     async fn transform(&mut self) -> Result<&mut Self> {
-        // @todo Combine data from sources into one result, i.e. update `latest` field
+        // @todo Combine data from sources into one result, i.e. update `latest` field, add schedule, etc
+        println!("{:#?}", self.data);
         Ok(self)
     }
 

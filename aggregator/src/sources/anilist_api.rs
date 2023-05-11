@@ -185,26 +185,6 @@ impl AniListAPI {
 
         Ok(lists)
     }
-
-    fn get_cache_key(user_id: u64) -> String {
-        format!("anilist_api:fetch_lists:{}", user_id)
-    }
-
-    async fn check_cache(&mut self, user: &User) -> Result<MediaLists> {
-        let redis = &mut self.db.lock().await.redis;
-        let key = Self::get_cache_key(user.id);
-
-        let cached: MediaLists = redis.check_cache(&key).await?;
-
-        Ok(cached)
-    }
-
-    async fn cache_value(&mut self, user: &User, lists: &MediaLists) {
-        let redis = &mut self.db.lock().await.redis;
-        let key = Self::get_cache_key(user.id);
-
-        redis.cache_value_ex(&key, lists, 600).await;
-    }
 }
 
 #[async_trait]
@@ -213,19 +193,29 @@ impl Source for AniListAPI {
 
     async fn extract(&mut self) -> Result<MediaLists> {
         let user = self.fetch_user().await?;
+        let cache_key = format!("anilist_api:fetch_lists:{}", user.id);
 
         // @todo Add option to skip cache
-        match self.check_cache(&user).await {
-            Ok(cached) => return Ok(cached),
-            Err(err) => {
-                println!("Could not get cached response: {}", err);
-            }
+        if let Some(cached) = self.get_cached(&cache_key).await {
+            return Ok(cached);
         }
 
         let lists = self.fetch_lists(user.id).await?;
-        self.cache_value(&user, &lists).await;
+        self.cache_value(&cache_key, &lists).await;
 
         Ok(lists)
+    }
+
+    async fn get_cached(&mut self, key: &str) -> Option<MediaLists> {
+        let redis = &mut self.db.lock().await.redis;
+
+        redis.get_cached(key).await
+    }
+
+    async fn cache_value(&mut self, key: &str, lists: &MediaLists) {
+        let redis = &mut self.db.lock().await.redis;
+
+        redis.cache_value_ex(key, lists, 600).await;
     }
 }
 

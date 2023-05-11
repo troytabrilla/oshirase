@@ -125,14 +125,23 @@ impl Redis {
         Ok(())
     }
 
-    pub async fn check_cache<T>(&mut self, key: &str) -> Result<T>
+    pub async fn get_cached<T>(&mut self, key: &str) -> Option<T>
     where
         T: DeserializeOwned,
     {
-        let cached = self.get::<String>(key).await?;
-        let cached = serde_json::from_str::<T>(&cached)?;
-
-        Ok(cached)
+        match self.get::<String>(key).await {
+            Ok(cached) => match serde_json::from_str::<T>(&cached) {
+                Ok(cached) => Some(cached),
+                Err(err) => {
+                    println!("Could not parse cached value: {}", err);
+                    None
+                }
+            },
+            Err(err) => {
+                println!("Could not get cached value: {}", err);
+                None
+            }
+        }
     }
 
     pub async fn cache_value_ex<T>(&mut self, key: &str, value: &T, seconds: usize)
@@ -255,7 +264,7 @@ mod tests {
         let mut redis = Redis::default();
         let expected = 420;
         redis.cache_value_ex(key, &expected, 10).await;
-        let actual: i32 = redis.check_cache(key).await.unwrap();
+        let actual: i32 = redis.get_cached(key).await.unwrap();
         assert_eq!(actual, expected);
     }
 

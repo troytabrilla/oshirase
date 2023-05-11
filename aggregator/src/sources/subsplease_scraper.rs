@@ -7,6 +7,7 @@ use crate::Result;
 use async_trait::async_trait;
 use headless_chrome::Browser;
 use scraper::{Html, Selector};
+use serde::{Deserialize, Serialize};
 use std::{error::Error, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -24,7 +25,7 @@ impl SubsPleaseScraper {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Day {
     Sunday,
     Monday,
@@ -52,15 +53,18 @@ impl FromStr for Day {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct AnimeSchedule {
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnimeScheduleEntry {
     pub title: String,
     pub day: Day,
     pub time: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct AnimeSchedule(Vec<AnimeScheduleEntry>);
+
 impl SubsPleaseScraper {
-    async fn scrape(&self) -> Result<Vec<AnimeSchedule>> {
+    async fn scrape(&self) -> Result<AnimeSchedule> {
         let browser = Browser::default()?;
         let tab = browser.new_tab()?;
 
@@ -73,7 +77,7 @@ impl SubsPleaseScraper {
 
         let tr = Selector::parse("tr")?;
 
-        let mut days: Vec<AnimeSchedule> = Vec::new();
+        let mut days: AnimeSchedule = AnimeSchedule(Vec::new());
         let mut current_day: Option<Day> = None;
 
         for element in table.select(&tr) {
@@ -102,7 +106,7 @@ impl SubsPleaseScraper {
                     };
 
                     if !title.is_empty() && !time.is_empty() && current_day.is_some() {
-                        days.push(AnimeSchedule {
+                        days.0.push(AnimeScheduleEntry {
                             title,
                             time,
                             day: current_day.clone().unwrap(),
@@ -118,12 +122,32 @@ impl SubsPleaseScraper {
 
 #[async_trait]
 impl Source for SubsPleaseScraper {
-    type Data = Vec<AnimeSchedule>;
+    type Data = AnimeSchedule;
 
-    async fn extract(&mut self) -> Result<Vec<AnimeSchedule>> {
-        // @todo Add caching (1 day)
+    async fn extract(&mut self) -> Result<AnimeSchedule> {
+        let cache_key = "subsplease_scraper";
+
         // @todo Add option to skip cache
-        self.scrape().await
+        if let Some(cached) = self.get_cached(cache_key).await {
+            return Ok(cached);
+        }
+
+        let schedule = self.scrape().await?;
+        self.cache_value(cache_key, &schedule).await;
+
+        Ok(schedule)
+    }
+
+    async fn get_cached(&mut self, key: &str) -> Option<AnimeSchedule> {
+        let redis = &mut self.db.lock().await.redis;
+
+        redis.get_cached(key).await
+    }
+
+    async fn cache_value(&mut self, key: &str, lists: &AnimeSchedule) {
+        let redis = &mut self.db.lock().await.redis;
+
+        redis.cache_value_ex(key, lists, 86400).await;
     }
 }
 
@@ -158,7 +182,7 @@ mod tests {
         let db = Arc::new(Mutex::new(DB::default()));
         let scraper = SubsPleaseScraper::new(&config.subsplease_scraper, db);
         let actual = scraper.scrape().await.unwrap();
-        assert!(!actual.is_empty());
+        assert!(!actual.0.is_empty());
     }
 
     #[tokio::test]
@@ -167,6 +191,6 @@ mod tests {
         let db = Arc::new(Mutex::new(DB::default()));
         let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, db);
         let actual = scraper.extract().await.unwrap();
-        assert!(!actual.is_empty());
+        assert!(!actual.0.is_empty());
     }
 }
