@@ -19,6 +19,7 @@ dependencies = [
  "headless_chrome",
  "mongodb",
  "redis",
+ "regex",
  "reqwest",
  "scraper",
  "serde",
