@@ -26,10 +26,8 @@ impl Merge {
                     let mut score_schedule_tuple: (f64, Option<&AnimeScheduleEntry>) =
                         (-f64::INFINITY, None);
                     for schedule in schedules {
-                        println!("{}, {}, {}", anime_title, anime_alt_title, schedule.title);
                         let score = normalized_levenshtein(anime_title, &schedule.title);
                         let alt_score = normalized_levenshtein(anime_alt_title, &schedule.title);
-                        println!("{}, {}", score, alt_score);
                         if score > score_schedule_tuple.0 {
                             score_schedule_tuple = (score, Some(schedule));
                         }
@@ -37,8 +35,6 @@ impl Merge {
                             score_schedule_tuple = (alt_score, Some(schedule));
                         }
                     }
-
-                    println!("{:#?}", score_schedule_tuple);
 
                     entry.schedule = score_schedule_tuple.1.cloned();
                 }
