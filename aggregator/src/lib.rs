@@ -86,8 +86,9 @@ impl Aggregator {
         let anime = &mut data.lists.anime;
         let schedule = &data.schedule.0;
 
-        let anime = Merge::merge(anime, schedule);
-        println!("{:#?}", anime);
+        let anime = Merge::merge(anime, schedule)?;
+
+        data.lists.anime = anime.to_vec();
 
         Ok(data)
     }

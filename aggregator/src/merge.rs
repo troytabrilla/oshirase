@@ -65,7 +65,7 @@ impl Merge {
         let query_parser = QueryParser::for_index(&index, vec![title, alt_title]);
 
         for schedule in schedules {
-            let query = query_parser.parse_query(&schedule.title);
+            let query = query_parser.parse_query(&schedule.title.replace('-', ""));
 
             let query = match query {
                 Ok(query) => query,
