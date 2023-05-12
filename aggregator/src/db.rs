@@ -129,6 +129,16 @@ impl Redis {
         Ok(())
     }
 
+    async fn set_ex_at<T>(&mut self, key: &str, value: &T, expire_at: usize) -> Result<()>
+    where
+        T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
+    {
+        self.connection_manager.set(key, &(*value).clone()).await?;
+        self.connection_manager.expire_at(key, expire_at).await?;
+
+        Ok(())
+    }
+
     pub async fn get_cached<T>(&mut self, key: &str) -> Option<T>
     where
         T: DeserializeOwned,
@@ -161,6 +171,23 @@ impl Redis {
         };
 
         if let Err(err) = self.set_ex::<String>(key, &serialized, seconds).await {
+            println!("Could not cache value for key {}: {}", key, err);
+        }
+    }
+
+    pub async fn cache_value_ex_at<T>(&mut self, key: &str, value: &T, expire_at: usize)
+    where
+        T: Serialize,
+    {
+        let serialized = match serde_json::to_string(value) {
+            Ok(serialized) => serialized,
+            Err(err) => {
+                println!("Could not stringify results: {}.", err);
+                return;
+            }
+        };
+
+        if let Err(err) = self.set_ex_at::<String>(key, &serialized, expire_at).await {
             println!("Could not cache value for key {}: {}", key, err);
         }
     }
@@ -253,6 +280,20 @@ mod tests {
         let mut redis = Redis::new(&config.db.redis).await;
         let expected = 420;
         redis.cache_value_ex(key, &expected, 10).await;
+        let actual: i32 = redis.get_cached(key).await.unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[tokio::test]
+    async fn test_redis_cache_at() {
+        let key = "test_redis_cache_at";
+        let config = Config::default();
+        let mut redis = Redis::new(&config.db.redis).await;
+        let expected = 420;
+        let expire_at =
+            usize::try_from(time::OffsetDateTime::now_utc().unix_timestamp()).unwrap() + 10;
+
+        redis.cache_value_ex_at(key, &expected, expire_at).await;
         let actual: i32 = redis.get_cached(key).await.unwrap();
         assert_eq!(actual, expected);
     }

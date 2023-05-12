@@ -10,6 +10,7 @@ use scraper::ElementRef;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, str::FromStr, sync::Arc};
+use time::{Duration, OffsetDateTime, Time};
 use tokio::sync::Mutex;
 
 pub struct SubsPleaseScraper {
@@ -145,8 +146,21 @@ impl Source for SubsPleaseScraper {
 
     async fn cache_value(&mut self, key: &str, lists: &AnimeSchedule) {
         let redis = &mut self.redis.lock().await;
+        let expire_at = match OffsetDateTime::now_utc().checked_add(Duration::DAY) {
+            Some(date) => {
+                let date = date.replace_time(Time::MIDNIGHT);
+                match usize::try_from(date.unix_timestamp()) {
+                    Ok(ts) => ts,
+                    Err(err) => {
+                        println!("Could not get unix timestamp for tomorrow: {}", err);
+                        86400
+                    }
+                }
+            }
+            None => 86400,
+        };
 
-        redis.cache_value_ex(key, lists, 86400).await;
+        redis.cache_value_ex_at(key, lists, expire_at).await;
     }
 }
 

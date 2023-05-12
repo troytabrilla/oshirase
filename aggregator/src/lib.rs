@@ -102,6 +102,11 @@ impl Aggregator {
         Ok(())
     }
 
+    // @todo Move caching behavior here as Cache trait and impl on Aggregator
+    // @todo Make Source trait require Cache trait
+    // @todo Disable caching in anilist_api (but keep get_key to use in Aggregator)
+    // @todo Cache overall results from run for 10 min
+    // @todo Add dont_cache to RunOptions
     pub async fn run(&mut self, options: Option<RunOptions>) -> Result<()> {
         let extract_options = match options {
             Some(options) => options.extract_options,
