@@ -1,10 +1,12 @@
 pub mod config;
 mod db;
+mod merge;
 mod sources;
 
 use anilist_api::*;
 use config::*;
 use db::*;
+use merge::*;
 use sources::*;
 use subsplease_scraper::*;
 
@@ -79,9 +81,14 @@ impl Aggregator {
         Ok(Data { lists, schedule })
     }
 
-    async fn transform(&mut self, data: Data) -> Result<Data> {
+    async fn transform(&mut self, mut data: Data) -> Result<Data> {
         // @todo Combine data from sources into one result, i.e. update `latest` field, add schedule, etc
-        // println!("{:#?}", data);
+        let anime = &mut data.lists.anime;
+        let schedule = &data.schedule.0;
+
+        let anime = Merge::merge(anime, schedule);
+        println!("{:#?}", anime);
+
         Ok(data)
     }
 

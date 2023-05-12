@@ -62,7 +62,7 @@ pub struct AnimeScheduleEntry {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct AnimeSchedule(Vec<AnimeScheduleEntry>);
+pub struct AnimeSchedule(pub Vec<AnimeScheduleEntry>);
 
 impl SubsPleaseScraper {
     fn load_schedule_table(&self) -> Result<Html> {
