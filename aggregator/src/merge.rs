@@ -11,6 +11,7 @@ use tempfile::TempDir;
 pub struct Merge;
 
 impl Merge {
+    // @todo Try to clean this up.
     pub fn merge<'a>(
         media: &'a mut [Media],
         schedules: &[AnimeScheduleEntry],

@@ -82,12 +82,10 @@ impl Aggregator {
     }
 
     async fn transform(&mut self, mut data: Data) -> Result<Data> {
-        // @todo Combine data from sources into one result, i.e. update `latest` field, add schedule, etc
         let anime = &mut data.lists.anime;
         let schedule = &data.schedule.0;
 
         let anime = Merge::merge(anime, schedule)?;
-
         data.lists.anime = anime.to_vec();
 
         Ok(data)
