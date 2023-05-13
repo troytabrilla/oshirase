@@ -186,6 +186,17 @@ impl AniListAPI {
     pub async fn fetch_lists(&self, user_id: u64, skip_full: bool) -> Result<MediaLists> {
         let variables = ani_list_list_query::Variables {
             user_id: Some(user_id as i64),
+            status_in: match skip_full {
+                true => Some(vec![Some(ani_list_list_query::MediaListStatus::CURRENT)]),
+                false => Some(vec![
+                    Some(ani_list_list_query::MediaListStatus::CURRENT),
+                    Some(ani_list_list_query::MediaListStatus::PLANNING),
+                    Some(ani_list_list_query::MediaListStatus::COMPLETED),
+                    Some(ani_list_list_query::MediaListStatus::DROPPED),
+                    Some(ani_list_list_query::MediaListStatus::PAUSED),
+                    Some(ani_list_list_query::MediaListStatus::REPEATING),
+                ]),
+            },
         };
         let body = AniListListQuery::build_query(variables);
 
