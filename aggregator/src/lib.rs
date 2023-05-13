@@ -42,7 +42,7 @@ impl Error for CustomError {}
 
 #[derive(Clone)]
 pub struct ExtractOptions {
-    pub dont_cache: bool,
+    pub dont_cache: Option<bool>,
 }
 
 pub struct RunOptions {
@@ -145,7 +145,9 @@ mod tests {
 
         let mut aggregator = Aggregator::new(&config).await;
         let options = RunOptions {
-            extract_options: Some(ExtractOptions { dont_cache: true }),
+            extract_options: Some(ExtractOptions {
+                dont_cache: Some(true),
+            }),
             dont_cache: Some(true),
         };
         aggregator.run(Some(options)).await.unwrap();

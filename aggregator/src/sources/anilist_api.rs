@@ -1,5 +1,5 @@
 use crate::config::AniListAPIConfig;
-use crate::db::{Document, Redis};
+use crate::db::Document;
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
@@ -11,8 +11,6 @@ use graphql_client::GraphQLQuery;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 type Json = serde_json::Value;
 

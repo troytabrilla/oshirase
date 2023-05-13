@@ -135,7 +135,7 @@ impl Source for SubsPleaseScraper {
         let cache_key = "subsplease_scraper:extract";
 
         let dont_cache = match options {
-            Some(options) => options.dont_cache,
+            Some(options) => options.dont_cache.unwrap_or(false),
             None => false,
         };
 
@@ -190,7 +190,9 @@ mod tests {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
-        let options = ExtractOptions { dont_cache: true };
+        let options = ExtractOptions {
+            dont_cache: Some(true),
+        };
         let actual = scraper.extract(Some(&options)).await.unwrap();
         assert!(!actual.0.is_empty());
     }
