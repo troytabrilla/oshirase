@@ -30,6 +30,11 @@ pub struct DBConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct CombinerConfig {
+    pub similarity_threshold: f64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct SubsPleaseScraperConfig {
     pub url: String,
 }
@@ -38,6 +43,7 @@ pub struct SubsPleaseScraperConfig {
 pub struct Config {
     pub anilist_api: AniListAPIConfig,
     pub db: DBConfig,
+    pub combiner: CombinerConfig,
     pub subsplease_scraper: SubsPleaseScraperConfig,
 }
 

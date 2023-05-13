@@ -171,7 +171,7 @@ mod tests {
     use crate::ExtractOptions;
 
     #[tokio::test]
-    async fn test_subsplease_scraper_new() {
+    async fn test_new() {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let scraper: SubsPleaseScraper = SubsPleaseScraper {
@@ -184,7 +184,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_subsplease_scraper_default() {
+    async fn test_default() {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let scraper: SubsPleaseScraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
@@ -192,7 +192,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_subsplease_scraper_scrape() {
+    async fn test_scrape() {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let scraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
@@ -201,7 +201,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_subsplease_scraper_extract() {
+    async fn test_extract() {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);

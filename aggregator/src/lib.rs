@@ -1,12 +1,12 @@
+mod combiner;
 pub mod config;
 mod db;
-mod merge;
 mod sources;
 
 use anilist_api::*;
+use combiner::*;
 use config::*;
 use db::*;
-use merge::*;
 use sources::*;
 use subsplease_scraper::*;
 
@@ -82,10 +82,12 @@ impl Aggregator {
     }
 
     async fn transform(&mut self, mut data: Data) -> Result<Data> {
+        let combiner = Combiner::new(&self.config.combiner);
+
         let anime = &mut data.lists.anime;
         let schedule = &data.schedule.0;
 
-        let anime = Merge::merge(anime, schedule)?;
+        let anime = combiner.combine(anime, schedule)?;
         data.lists.anime = anime.to_vec();
 
         Ok(data)
@@ -125,7 +127,7 @@ mod tests {
     use mongodb::bson::doc;
 
     #[tokio::test]
-    async fn test_aggregator_run() {
+    async fn test_run() {
         let config = Config::default();
         let mongodb = MongoDB::new(&config.db.mongodb);
         let database = mongodb.client.database("test");

@@ -242,7 +242,7 @@ mod tests {
     use crate::ExtractOptions;
 
     #[tokio::test]
-    async fn test_anilist_api_new() {
+    async fn test_new() {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let api = AniListAPI::new(
@@ -259,7 +259,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_anilist_api_fetch_user() {
+    async fn test_fetch_user() {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let api = AniListAPI::new(&config.anilist_api, redis);
@@ -268,7 +268,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_anilist_api_fetch_lists() {
+    async fn test_fetch_lists() {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let api = AniListAPI::new(&config.anilist_api, redis);
@@ -279,7 +279,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_anilist_api_extract() {
+    async fn test_extract() {
         let config = Config::default();
         let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
         let mut api = AniListAPI::new(&config.anilist_api, redis);

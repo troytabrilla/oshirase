@@ -1,13 +1,23 @@
+use crate::config::{CombinerConfig, Config};
 use crate::sources::anilist_api::Media;
 use crate::sources::subsplease_scraper::AnimeScheduleEntry;
 use crate::Result;
 
 use strsim::normalized_levenshtein;
 
-pub struct Merge;
+pub struct Combiner {
+    config: CombinerConfig,
+}
 
-impl Merge {
-    pub fn merge<'a>(
+impl Combiner {
+    pub fn new(config: &CombinerConfig) -> Combiner {
+        Combiner {
+            config: config.clone(),
+        }
+    }
+
+    pub fn combine<'a>(
+        &self,
         anime: &'a mut [Media],
         schedules: &[AnimeScheduleEntry],
     ) -> Result<&'a [Media]> {
@@ -28,10 +38,14 @@ impl Merge {
                     for schedule in schedules {
                         let score = normalized_levenshtein(anime_title, &schedule.title);
                         let alt_score = normalized_levenshtein(anime_alt_title, &schedule.title);
-                        if score > score_schedule_tuple.0 {
+                        if score > self.config.similarity_threshold
+                            && score > score_schedule_tuple.0
+                        {
                             score_schedule_tuple = (score, Some(schedule));
                         }
-                        if alt_score > score_schedule_tuple.0 {
+                        if alt_score > self.config.similarity_threshold
+                            && alt_score > score_schedule_tuple.0
+                        {
                             score_schedule_tuple = (alt_score, Some(schedule));
                         }
                     }
@@ -45,6 +59,14 @@ impl Merge {
     }
 }
 
+impl Default for Combiner {
+    fn default() -> Self {
+        let config = Config::default();
+
+        Combiner::new(&config.combiner)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,7 +74,7 @@ mod tests {
     use crate::sources::subsplease_scraper::Day;
 
     #[test]
-    fn test_merge() {
+    fn test_combine() {
         let mut media = vec![Media {
             media_id: Some(1),
             media_type: None,
@@ -87,7 +109,8 @@ mod tests {
             },
         ];
 
-        let media = Merge::merge(&mut media, &schedules).unwrap();
+        let combiner = Combiner::default();
+        let media = combiner.combine(&mut media, &schedules).unwrap();
 
         let actual = media[0].schedule.as_ref().unwrap();
         let expected = &schedules[0];
