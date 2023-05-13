@@ -15,6 +15,7 @@ use std::{
     hash::{Hash, Hasher},
     sync::Arc,
 };
+use time::{Duration, OffsetDateTime, Time};
 use tokio::sync::Mutex;
 
 pub struct MongoDB {
@@ -182,7 +183,7 @@ impl Redis {
         let serialized = match serde_json::to_string(value) {
             Ok(serialized) => serialized,
             Err(err) => {
-                println!("Could not stringify results: {}.", err);
+                println!("Could not serialize results: {}.", err);
                 return;
             }
         };
@@ -210,7 +211,7 @@ impl Redis {
         let serialized = match serde_json::to_string(value) {
             Ok(serialized) => serialized,
             Err(err) => {
-                println!("Could not stringify results: {}.", err);
+                println!("Could not serialize results: {}.", err);
                 return;
             }
         };
@@ -218,6 +219,32 @@ impl Redis {
         if let Err(err) = self.set_ex_at::<String>(key, &serialized, expire_at).await {
             println!("Could not cache value for key {}: {}", key, err);
         }
+    }
+
+    pub async fn cache_value_expire_tomorrow<T>(
+        &mut self,
+        key: &str,
+        value: &T,
+        dont_cache: Option<bool>,
+    ) where
+        T: Serialize,
+    {
+        let expire_at = match OffsetDateTime::now_utc().checked_add(Duration::DAY) {
+            Some(date) => {
+                let date = date.replace_time(Time::MIDNIGHT);
+                match usize::try_from(date.unix_timestamp()) {
+                    Ok(ts) => ts,
+                    Err(err) => {
+                        println!("Could not get unix timestamp for tomorrow: {}", err);
+                        self.config.ttl_fallback
+                    }
+                }
+            }
+            None => self.config.ttl_fallback,
+        };
+
+        self.cache_value_expire_at(key, value, expire_at, dont_cache)
+            .await
     }
 }
 

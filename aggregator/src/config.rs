@@ -26,6 +26,7 @@ pub struct MongoDBConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct RedisConfig {
     pub host: String,
+    pub ttl_fallback: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -42,7 +43,6 @@ pub struct CombinerConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubsPleaseScraperConfig {
     pub url: String,
-    pub ttl_fallback: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -72,7 +72,7 @@ impl Aggregator {
     }
 
     async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Data> {
-        let mut anilist_api = AniListAPI::new(&self.config.anilist_api);
+        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, self.db.redis.clone());
         let mut subsplease_scraper =
             SubsPleaseScraper::new(&self.config.subsplease_scraper, self.db.redis.clone());
 
@@ -105,7 +105,7 @@ impl Aggregator {
         Ok(())
     }
 
-    // @todo Cache overall results from run per user (anilist_api.get_cache_key) for 10 min (self.config.aggregator.ttl)
+    // @todo Cache overall results from run per user (anilist_api.get_cache_key("extract", None)) for 10 min (self.config.aggregator.ttl)
     pub async fn run(&mut self, options: Option<RunOptions>) -> Result<()> {
         let extract_options = match options {
             Some(options) => options.extract_options,

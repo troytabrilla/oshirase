@@ -1,5 +1,5 @@
 use crate::config::AniListAPIConfig;
-use crate::db::Document;
+use crate::db::{Document, Redis};
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
@@ -11,10 +11,12 @@ use graphql_client::GraphQLQuery;
 use reqwest;
 use serde::{Deserialize, Serialize};
 use serde_json;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 type Json = serde_json::Value;
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct User {
     id: u64,
     name: String,
@@ -62,12 +64,14 @@ struct AniListListQuery;
 
 pub struct AniListAPI {
     config: AniListAPIConfig,
+    redis: Arc<Mutex<Redis>>,
 }
 
 impl AniListAPI {
-    pub fn new(config: &AniListAPIConfig) -> AniListAPI {
+    pub fn new(config: &AniListAPIConfig, redis: Arc<Mutex<Redis>>) -> AniListAPI {
         AniListAPI {
             config: config.clone(),
+            redis,
         }
     }
 
@@ -178,7 +182,8 @@ impl AniListAPI {
         }
     }
 
-    pub async fn fetch_lists(&self, user_id: u64) -> Result<MediaLists> {
+    // @todo Only fetch full list (all statuses) once a day, otherwise only fetch CURRENT list
+    pub async fn fetch_lists(&self, user_id: u64, skip_full: bool) -> Result<MediaLists> {
         let variables = ani_list_list_query::Variables {
             user_id: Some(user_id as i64),
         };
@@ -197,10 +202,13 @@ impl AniListAPI {
         Ok(lists)
     }
 
-    pub async fn get_cache_key(&self) -> Result<String> {
-        let user = self.fetch_user().await?;
+    pub async fn get_cache_key(&self, key: &str, user: Option<User>) -> Result<String> {
+        let user = match user {
+            Some(user) => user,
+            None => self.fetch_user().await?,
+        };
 
-        Ok(format!("anilist_api:extract:{}", user.id))
+        Ok(format!("anilist_api:{}:{}", key, user.id))
     }
 }
 
@@ -208,9 +216,28 @@ impl AniListAPI {
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn extract(&mut self, _options: Option<&ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
         let user = self.fetch_user().await?;
-        let data = self.fetch_lists(user.id).await?;
+
+        let cache_key = self.get_cache_key("skip_full", Some(user.clone())).await?;
+
+        let dont_cache = match options {
+            Some(options) => options.dont_cache.unwrap_or(false),
+            None => false,
+        };
+
+        let mut redis = self.redis.lock().await;
+
+        let skip_full = redis
+            .get_cached::<bool>(&cache_key, Some(dont_cache))
+            .await
+            .is_some();
+
+        let data = self.fetch_lists(user.id, skip_full).await?;
+
+        redis
+            .cache_value_expire_tomorrow::<bool>(&cache_key, &true, Some(dont_cache))
+            .await;
 
         Ok(data)
     }
@@ -224,7 +251,8 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_user() {
         let config = Config::default();
-        let api = AniListAPI::new(&config.anilist_api);
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
+        let api = AniListAPI::new(&config.anilist_api, redis);
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
     }
@@ -232,9 +260,10 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_lists() {
         let config = Config::default();
-        let api = AniListAPI::new(&config.anilist_api);
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
+        let api = AniListAPI::new(&config.anilist_api, redis);
         let user = api.fetch_user().await.unwrap();
-        let actual = api.fetch_lists(user.id).await.unwrap();
+        let actual = api.fetch_lists(user.id, false).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }
@@ -242,7 +271,8 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let mut api = AniListAPI::new(&config.anilist_api);
+        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
+        let mut api = AniListAPI::new(&config.anilist_api, redis);
         let actual = api.extract(None).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());

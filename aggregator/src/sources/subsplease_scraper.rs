@@ -11,7 +11,6 @@ use scraper::ElementRef;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, str::FromStr, sync::Arc};
-use time::{Duration, OffsetDateTime, Time};
 use tokio::sync::Mutex;
 
 pub struct SubsPleaseScraper {
@@ -148,22 +147,8 @@ impl Source for SubsPleaseScraper {
 
         let data = self.scrape().await?;
 
-        let expire_at = match OffsetDateTime::now_utc().checked_add(Duration::DAY) {
-            Some(date) => {
-                let date = date.replace_time(Time::MIDNIGHT);
-                match usize::try_from(date.unix_timestamp()) {
-                    Ok(ts) => ts,
-                    Err(err) => {
-                        println!("Could not get unix timestamp for tomorrow: {}", err);
-                        self.config.ttl_fallback
-                    }
-                }
-            }
-            None => self.config.ttl_fallback,
-        };
-
         redis
-            .cache_value_expire_at(cache_key, &data, expire_at, Some(dont_cache))
+            .cache_value_expire_tomorrow(cache_key, &data, Some(dont_cache))
             .await;
 
         Ok(data)
