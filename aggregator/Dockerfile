@@ -21,4 +21,4 @@ FROM debian:bullseye-slim
 COPY --from=build /usr/src/oshirase/aggregator/target/release/aggregator /usr/local/bin/aggregator
 COPY --from=build /usr/src/oshirase/aggregator/config/config.toml ./config/config.toml
 COPY --from=build /usr/src/oshirase/aggregator/graphql/ ./graphql/
-CMD ["aggregator", "config/config.toml"]
+CMD ["aggregator"]

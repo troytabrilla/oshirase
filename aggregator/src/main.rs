@@ -1,22 +1,44 @@
-use aggregator::config::Config;
-use aggregator::Aggregator;
-use aggregator::Result;
+use aggregator::{config::Config, Aggregator, ExtractOptions, Result, RunOptions};
 
-use std::env;
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(
+    version,
+    about = "Aggregate anime and manga data from different sources."
+)]
+struct Cli {
+    #[arg(short, long, help = "Path to config.toml")]
+    config: Option<String>,
+
+    #[arg(short, long, help = "Disable caching")]
+    dont_cache: bool,
+
+    #[arg(short, long, help = "Print results")]
+    print: bool,
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // @todo Add cache override as CLI option
-    let args: Vec<String> = env::args().collect();
-    let config = if args.len() < 2 {
-        println!("Using default config file.");
-        Config::default()
-    } else {
-        println!("Using config file {}.", args[1]);
-        Config::from_file(&args[1])
+    let cli = Cli::parse();
+
+    let config = match cli.config {
+        Some(config) => Config::from_file(&config),
+        None => Config::default(),
     };
 
-    Aggregator::new(&config).await.run(None).await?;
+    let options = RunOptions {
+        dont_cache: Some(cli.dont_cache),
+        extract_options: Some(ExtractOptions {
+            dont_cache: Some(cli.dont_cache),
+        }),
+    };
+
+    let data = Aggregator::new(&config).await.run(Some(options)).await?;
+
+    if cli.print {
+        println!("{:?}", data);
+    }
 
     Ok(())
 }

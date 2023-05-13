@@ -86,7 +86,7 @@ impl SubsPleaseScraper {
                 None => String::new(),
             },
             Err(err) => {
-                println!("Could not parse selector: {}", err);
+                eprintln!("Could not parse selector: {}", err);
                 String::new()
             }
         }

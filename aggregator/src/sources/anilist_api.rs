@@ -182,7 +182,6 @@ impl AniListAPI {
         }
     }
 
-    // @todo Only fetch full list (all statuses) once a day, otherwise only fetch CURRENT list
     pub async fn fetch_lists(&self, user_id: u64, skip_full: bool) -> Result<MediaLists> {
         let variables = ani_list_list_query::Variables {
             user_id: Some(user_id as i64),
@@ -219,7 +218,7 @@ impl AniListAPI {
             None => self.fetch_user().await?,
         };
 
-        Ok(format!("anilist_api:{}:{}", key, user.id))
+        Ok(format!("{}:{}", key, user.id))
     }
 }
 
@@ -230,7 +229,9 @@ impl Source for AniListAPI {
     async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
         let user = self.fetch_user().await?;
 
-        let cache_key = self.get_cache_key("skip_full", Some(user.clone())).await?;
+        let cache_key = self
+            .get_cache_key("anilist_api:skip_full", Some(user.clone()))
+            .await?;
 
         let dont_cache = match options {
             Some(options) => options.dont_cache.unwrap_or(false),
@@ -284,7 +285,10 @@ mod tests {
         let config = Config::default();
         let db = DB::new(&config.db).await;
         let mut api = AniListAPI::new(&config.anilist_api, &db);
-        let actual = api.extract(None).await.unwrap();
+        let options = ExtractOptions {
+            dont_cache: Some(true),
+        };
+        let actual = api.extract(Some(&options)).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

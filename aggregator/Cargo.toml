@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 async-trait = "0.1"
 bson = "2.6"
+clap = { version = "4.2", features = ["derive"] }
 futures = "0.3"
 graphql_client = "0.12"
 headless_chrome = "1.0"

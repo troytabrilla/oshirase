@@ -7,6 +7,7 @@ use anilist_api::*;
 use combiner::*;
 use config::*;
 use db::*;
+use serde::{Deserialize, Serialize};
 use sources::*;
 use subsplease_scraper::*;
 
@@ -50,7 +51,7 @@ pub struct RunOptions {
     pub dont_cache: Option<bool>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Data {
     lists: MediaLists,
     schedule: AnimeSchedule,
@@ -59,25 +60,27 @@ pub struct Data {
 pub struct Aggregator {
     config: Config,
     db: DB,
+    anilist_api: AniListAPI,
+    subsplease_scraper: SubsPleaseScraper,
 }
 
 impl Aggregator {
     pub async fn new(config: &Config) -> Aggregator {
         let db = DB::new(&config.db).await;
+        let anilist_api = AniListAPI::new(&config.anilist_api, &db);
+        let subsplease_scraper = SubsPleaseScraper::new(&config.subsplease_scraper, &db);
 
         Aggregator {
             config: config.clone(),
             db,
+            anilist_api,
+            subsplease_scraper,
         }
     }
 
     async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Data> {
-        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, &self.db);
-        let mut subsplease_scraper =
-            SubsPleaseScraper::new(&self.config.subsplease_scraper, &self.db);
-
-        let lists = anilist_api.extract(options).await?;
-        let schedule = subsplease_scraper.extract(options).await?;
+        let lists = self.anilist_api.extract(options).await?;
+        let schedule = self.subsplease_scraper.extract(options).await?;
 
         Ok(Data { lists, schedule })
     }
@@ -94,8 +97,8 @@ impl Aggregator {
         Ok(data)
     }
 
-    async fn load(&self, data: Data) -> Result<()> {
-        let mongodb = &self.db.mongodb.lock().await;
+    async fn load(&self, data: &Data) -> Result<()> {
+        let mongodb = self.db.mongodb.lock().await;
 
         let anime_future = mongodb.upsert_documents("anime", "media_id", &data.lists.anime);
         let manga_future = mongodb.upsert_documents("manga", "media_id", &data.lists.manga);
@@ -105,16 +108,44 @@ impl Aggregator {
         Ok(())
     }
 
-    // @todo Cache overall results from run per user (anilist_api.get_cache_key("extract", None)) for 10 min (self.config.aggregator.ttl)
-    pub async fn run(&mut self, options: Option<RunOptions>) -> Result<()> {
-        let extract_options = match options {
-            Some(options) => options.extract_options,
-            None => None,
+    pub async fn run(&mut self, options: Option<RunOptions>) -> Result<Data> {
+        let (dont_cache, extract_options) = match options {
+            Some(options) => (options.dont_cache.unwrap_or(false), options.extract_options),
+            None => (false, None),
         };
+
+        let cache_key = self
+            .anilist_api
+            .get_cache_key("aggregator:run", None)
+            .await?;
+
+        let redis = self.db.redis.clone();
+        let mut redis = redis.lock().await;
+
+        if let Some(cached) = redis.get_cached::<Data>(&cache_key, Some(dont_cache)).await {
+            println!("Got cached value for cache key: {}.", cache_key);
+            return Ok(cached);
+        }
+
+        // Release lock on redis so sources can cache results as necessary
+        drop(redis);
 
         let data = self.extract(extract_options.as_ref()).await?;
         let data = self.transform(data).await?;
-        self.load(data).await
+        self.load(&data).await?;
+
+        let redis = self.db.redis.clone();
+        let mut redis = redis.lock().await;
+        redis
+            .cache_value_expire(
+                &cache_key,
+                &data,
+                self.config.aggregator.ttl,
+                Some(dont_cache),
+            )
+            .await;
+
+        Ok(data)
     }
 }
 

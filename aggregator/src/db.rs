@@ -163,12 +163,12 @@ impl Redis {
             Ok(cached) => match serde_json::from_str::<T>(&cached) {
                 Ok(cached) => Some(cached),
                 Err(err) => {
-                    println!("Could not parse cached value: {}", err);
+                    eprintln!("Could not parse cached value for {}: {}", key, err);
                     None
                 }
             },
             Err(err) => {
-                println!("Could not get cached value: {}", err);
+                eprintln!("Could not get cached value for {}: {}", key, err);
                 None
             }
         }
@@ -192,13 +192,13 @@ impl Redis {
         let serialized = match serde_json::to_string(value) {
             Ok(serialized) => serialized,
             Err(err) => {
-                println!("Could not serialize results: {}.", err);
+                eprintln!("Could not serialize results for key {}: {}.", key, err);
                 return;
             }
         };
 
         if let Err(err) = self.set_ex::<String>(key, &serialized, seconds).await {
-            println!("Could not cache value for key {}: {}", key, err);
+            eprintln!("Could not cache value for key {}: {}", key, err);
         }
     }
 
@@ -220,13 +220,13 @@ impl Redis {
         let serialized = match serde_json::to_string(value) {
             Ok(serialized) => serialized,
             Err(err) => {
-                println!("Could not serialize results: {}.", err);
+                eprintln!("Could not serialize results for key {}: {}.", key, err);
                 return;
             }
         };
 
         if let Err(err) = self.set_ex_at::<String>(key, &serialized, expire_at).await {
-            println!("Could not cache value for key {}: {}", key, err);
+            eprintln!("Could not cache value for key {}: {}", key, err);
         }
     }
 
@@ -244,7 +244,10 @@ impl Redis {
                 match usize::try_from(date.unix_timestamp()) {
                     Ok(ts) => ts,
                     Err(err) => {
-                        println!("Could not get unix timestamp for tomorrow: {}", err);
+                        eprintln!(
+                            "Could not get unix timestamp for tomorrow for key {}: {}",
+                            key, err
+                        );
                         self.config.ttl_fallback
                     }
                 }
