@@ -1,5 +1,5 @@
 use crate::config::AniListAPIConfig;
-use crate::db::{Document, Redis};
+use crate::db::{Document, Redis, DB};
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
@@ -68,10 +68,10 @@ pub struct AniListAPI {
 }
 
 impl AniListAPI {
-    pub fn new(config: &AniListAPIConfig, redis: Arc<Mutex<Redis>>) -> AniListAPI {
+    pub fn new(config: &AniListAPIConfig, db: &DB) -> AniListAPI {
         AniListAPI {
             config: config.clone(),
-            redis,
+            redis: db.redis.clone(),
         }
     }
 
@@ -251,8 +251,8 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_user() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let api = AniListAPI::new(&config.anilist_api, redis);
+        let db = DB::new(&config.db).await;
+        let api = AniListAPI::new(&config.anilist_api, &db);
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
     }
@@ -260,8 +260,8 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_lists() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let api = AniListAPI::new(&config.anilist_api, redis);
+        let db = DB::new(&config.db).await;
+        let api = AniListAPI::new(&config.anilist_api, &db);
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id, false).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -271,8 +271,8 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let mut api = AniListAPI::new(&config.anilist_api, redis);
+        let db = DB::new(&config.db).await;
+        let mut api = AniListAPI::new(&config.anilist_api, &db);
         let actual = api.extract(None).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());

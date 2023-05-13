@@ -1,5 +1,5 @@
 use crate::config::SubsPleaseScraperConfig;
-use crate::db::Redis;
+use crate::db::{Redis, DB};
 use crate::sources::Source;
 use crate::CustomError;
 use crate::ExtractOptions;
@@ -12,20 +12,6 @@ use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
-
-pub struct SubsPleaseScraper {
-    config: SubsPleaseScraperConfig,
-    redis: Arc<Mutex<Redis>>,
-}
-
-impl SubsPleaseScraper {
-    pub fn new(config: &SubsPleaseScraperConfig, redis: Arc<Mutex<Redis>>) -> SubsPleaseScraper {
-        SubsPleaseScraper {
-            config: config.clone(),
-            redis,
-        }
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub enum Day {
@@ -65,7 +51,19 @@ pub struct AnimeScheduleEntry {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AnimeSchedule(pub Vec<AnimeScheduleEntry>);
 
+pub struct SubsPleaseScraper {
+    config: SubsPleaseScraperConfig,
+    redis: Arc<Mutex<Redis>>,
+}
+
 impl SubsPleaseScraper {
+    pub fn new(config: &SubsPleaseScraperConfig, db: &DB) -> SubsPleaseScraper {
+        SubsPleaseScraper {
+            config: config.clone(),
+            redis: db.redis.clone(),
+        }
+    }
+
     fn load_schedule_table(&self) -> Result<Html> {
         let browser = Browser::default()?;
         let tab = browser.new_tab()?;
@@ -164,8 +162,8 @@ mod tests {
     #[tokio::test]
     async fn test_scrape() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let scraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
+        let db = DB::new(&config.db).await;
+        let scraper = SubsPleaseScraper::new(&config.subsplease_scraper, &db);
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.0.is_empty());
     }
@@ -173,8 +171,8 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
+        let db = DB::new(&config.db).await;
+        let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, &db);
         let options = ExtractOptions {
             dont_cache: Some(true),
         };

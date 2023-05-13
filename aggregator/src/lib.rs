@@ -72,9 +72,9 @@ impl Aggregator {
     }
 
     async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Data> {
-        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, self.db.redis.clone());
+        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, &self.db);
         let mut subsplease_scraper =
-            SubsPleaseScraper::new(&self.config.subsplease_scraper, self.db.redis.clone());
+            SubsPleaseScraper::new(&self.config.subsplease_scraper, &self.db);
 
         let lists = anilist_api.extract(options).await?;
         let schedule = subsplease_scraper.extract(options).await?;
@@ -97,8 +97,8 @@ impl Aggregator {
     async fn load(&self, data: Data) -> Result<()> {
         let mongodb = &self.db.mongodb.lock().await;
 
-        let anime_future = mongodb.upsert_documents("anime", &data.lists.anime);
-        let manga_future = mongodb.upsert_documents("manga", &data.lists.manga);
+        let anime_future = mongodb.upsert_documents("anime", "media_id", &data.lists.anime);
+        let manga_future = mongodb.upsert_documents("manga", "media_id", &data.lists.manga);
 
         try_join!(anime_future, manga_future)?;
 

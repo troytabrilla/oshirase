@@ -1,4 +1,5 @@
 use crate::config::{Config, DBConfig, MongoDBConfig, RedisConfig};
+use crate::CustomError;
 use crate::Result;
 
 use bson::to_document;
@@ -51,7 +52,12 @@ impl MongoDB {
         format!("{:x}", hash)
     }
 
-    pub async fn upsert_documents<T>(&self, collection: &str, documents: &Vec<T>) -> Result<()>
+    pub async fn upsert_documents<T>(
+        &self,
+        collection: &str,
+        id_key: &str,
+        documents: &Vec<T>,
+    ) -> Result<()>
     where
         T: Document,
     {
@@ -63,15 +69,18 @@ impl MongoDB {
         for document in documents {
             let hash = Self::hash_document(document);
 
-            let filter = doc! { "hash": &hash };
-            let existing = collection.find_one(filter.clone(), None).await?;
+            let existing = collection.find_one(doc! { "hash": &hash }, None).await?;
 
             if existing.is_none() {
                 let mut document = to_document(document)?;
                 document.extend(doc! { "modified": bson::DateTime::now(), "hash": &hash });
 
+                let id = document
+                    .get(id_key)
+                    .ok_or(CustomError::boxed(&format!("Could not find {}.", id_key)))?;
+
                 futures.push(collection.find_one_and_update(
-                    filter.clone(),
+                    doc! { format!("{}", id_key): id },
                     doc! { "$set": document },
                     FindOneAndUpdateOptions::builder().upsert(true).build(),
                 ));
@@ -285,6 +294,7 @@ mod tests {
 
         mongo
             .upsert_documents(
+                "test",
                 "test",
                 &vec![Test {
                     test: "test".to_owned(),
