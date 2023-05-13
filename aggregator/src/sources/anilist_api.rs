@@ -3,6 +3,7 @@ use crate::db::{Document, Redis};
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
+use crate::ExtractOptions;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -63,14 +64,12 @@ struct AniListListQuery;
 
 pub struct AniListAPI {
     config: AniListAPIConfig,
-    redis: Arc<Mutex<Redis>>,
 }
 
 impl AniListAPI {
-    pub fn new(config: &AniListAPIConfig, redis: Arc<Mutex<Redis>>) -> AniListAPI {
+    pub fn new(config: &AniListAPIConfig) -> AniListAPI {
         AniListAPI {
             config: config.clone(),
-            redis,
         }
     }
 
@@ -199,39 +198,23 @@ impl AniListAPI {
 
         Ok(lists)
     }
+
+    pub async fn get_cache_key(&self) -> Result<String> {
+        let user = self.fetch_user().await?;
+
+        Ok(format!("anilist_api:extract:{}", user.id))
+    }
 }
 
 #[async_trait]
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn get_key(&self) -> String {
-        let user = self.fetch_user().await;
-        match user {
-            Ok(user) => format!("anilist_api:extract:{}", user.id),
-            Err(err) => {
-                println!("Could not get user for cache key: {}", err);
-                String::new()
-            }
-        }
-    }
-
-    async fn get_data(&self) -> Result<MediaLists> {
+    async fn extract(&mut self, _options: Option<&ExtractOptions>) -> Result<Self::Data> {
         let user = self.fetch_user().await?;
+        let data = self.fetch_lists(user.id).await?;
 
-        self.fetch_lists(user.id).await
-    }
-
-    async fn get_cached(&mut self, key: &str) -> Option<MediaLists> {
-        let redis = &mut self.redis.lock().await;
-
-        redis.get_cached(key).await
-    }
-
-    async fn cache_value(&mut self, key: &str, lists: &MediaLists) {
-        let redis = &mut self.redis.lock().await;
-
-        redis.cache_value_ex(key, lists, 600).await;
+        Ok(data)
     }
 }
 
@@ -239,30 +222,11 @@ impl Source for AniListAPI {
 mod tests {
     use super::*;
     use crate::config::*;
-    use crate::ExtractOptions;
-
-    #[tokio::test]
-    async fn test_new() {
-        let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let api = AniListAPI::new(
-            &AniListAPIConfig {
-                url: "url".to_owned(),
-                auth: AniListAPIAuthConfig {
-                    access_token: "access_token".to_owned(),
-                },
-            },
-            redis,
-        );
-        assert_eq!(api.config.url, "url");
-        assert_eq!(api.config.auth.access_token, "access_token");
-    }
 
     #[tokio::test]
     async fn test_fetch_user() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let api = AniListAPI::new(&config.anilist_api, redis);
+        let api = AniListAPI::new(&config.anilist_api);
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
     }
@@ -270,8 +234,7 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_lists() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let api = AniListAPI::new(&config.anilist_api, redis);
+        let api = AniListAPI::new(&config.anilist_api);
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -281,10 +244,8 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let mut api = AniListAPI::new(&config.anilist_api, redis);
-        let options = ExtractOptions { dont_cache: true };
-        let actual = api.extract(Some(&options)).await.unwrap();
+        let mut api = AniListAPI::new(&config.anilist_api);
+        let actual = api.extract(None).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

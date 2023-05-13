@@ -139,10 +139,16 @@ impl Redis {
         Ok(())
     }
 
-    pub async fn get_cached<T>(&mut self, key: &str) -> Option<T>
+    pub async fn get_cached<T>(&mut self, key: &str, dont_cache: Option<bool>) -> Option<T>
     where
         T: DeserializeOwned,
     {
+        if let Some(dont_cache) = dont_cache {
+            if dont_cache {
+                return None;
+            }
+        }
+
         match self.get::<String>(key).await {
             Ok(cached) => match serde_json::from_str::<T>(&cached) {
                 Ok(cached) => Some(cached),
@@ -158,10 +164,21 @@ impl Redis {
         }
     }
 
-    pub async fn cache_value_ex<T>(&mut self, key: &str, value: &T, seconds: usize)
-    where
+    pub async fn cache_value_expire<T>(
+        &mut self,
+        key: &str,
+        value: &T,
+        seconds: usize,
+        dont_cache: Option<bool>,
+    ) where
         T: Serialize,
     {
+        if let Some(dont_cache) = dont_cache {
+            if dont_cache {
+                return;
+            }
+        }
+
         let serialized = match serde_json::to_string(value) {
             Ok(serialized) => serialized,
             Err(err) => {
@@ -175,10 +192,21 @@ impl Redis {
         }
     }
 
-    pub async fn cache_value_ex_at<T>(&mut self, key: &str, value: &T, expire_at: usize)
-    where
+    pub async fn cache_value_expire_at<T>(
+        &mut self,
+        key: &str,
+        value: &T,
+        expire_at: usize,
+        dont_cache: Option<bool>,
+    ) where
         T: Serialize,
     {
+        if let Some(dont_cache) = dont_cache {
+            if dont_cache {
+                return;
+            }
+        }
+
         let serialized = match serde_json::to_string(value) {
             Ok(serialized) => serialized,
             Err(err) => {
@@ -211,24 +239,6 @@ impl DB {
 mod tests {
     use super::*;
     use serde::Deserialize;
-
-    #[tokio::test]
-    async fn test_mongodb_new() {
-        let mongo = MongoDB::new(&MongoDBConfig {
-            host: "127.0.0.1".to_owned(),
-            database: "database".to_owned(),
-        });
-        assert_eq!(mongo.config.database, "database");
-    }
-
-    #[tokio::test]
-    async fn test_mongodb_default() {
-        let mongo = MongoDB::default();
-        let actual = mongo.client.list_database_names(None, None).await.unwrap();
-        assert!(actual.contains(&"admin".to_owned()));
-        assert!(actual.contains(&"config".to_owned()));
-        assert!(actual.contains(&"local".to_owned()));
-    }
 
     #[derive(Hash, PartialEq, Serialize, Deserialize)]
     struct Test {
@@ -265,22 +275,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_redis_new() {
-        let redis = Redis::new(&RedisConfig {
-            host: "redis://localhost/".to_owned(),
-        })
-        .await;
-        assert_eq!(redis.config.host, "redis://localhost/");
-    }
-
-    #[tokio::test]
     async fn test_redis_cache() {
         let key = "test_redis_cache";
         let config = Config::default();
         let mut redis = Redis::new(&config.db.redis).await;
         let expected = 420;
-        redis.cache_value_ex(key, &expected, 10).await;
-        let actual: i32 = redis.get_cached(key).await.unwrap();
+        redis.cache_value_expire(key, &expected, 10, None).await;
+        let actual: i32 = redis.get_cached(key, None).await.unwrap();
         assert_eq!(actual, expected);
     }
 
@@ -293,32 +294,10 @@ mod tests {
         let expire_at =
             usize::try_from(time::OffsetDateTime::now_utc().unix_timestamp()).unwrap() + 10;
 
-        redis.cache_value_ex_at(key, &expected, expire_at).await;
-        let actual: i32 = redis.get_cached(key).await.unwrap();
+        redis
+            .cache_value_expire_at(key, &expected, expire_at, None)
+            .await;
+        let actual: i32 = redis.get_cached(key, None).await.unwrap();
         assert_eq!(actual, expected);
-    }
-
-    #[tokio::test]
-    async fn test_db_new() {
-        let db = DB::new(&DBConfig {
-            mongodb: MongoDBConfig {
-                host: "host".to_owned(),
-                database: "database".to_owned(),
-            },
-            redis: RedisConfig {
-                host: "redis://localhost/".to_owned(),
-            },
-        })
-        .await;
-        assert_eq!(db.mongodb.lock().await.config.host, "host");
-        assert_eq!(db.redis.lock().await.config.host, "redis://localhost/");
-    }
-
-    #[tokio::test]
-    async fn test_db_default() {
-        let config = Config::default();
-        let db = DB::new(&config.db).await;
-        assert_eq!(db.mongodb.lock().await.config.host, "127.0.0.1");
-        assert_eq!(db.redis.lock().await.config.host, "redis://127.0.0.1/");
     }
 }

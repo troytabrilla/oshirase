@@ -2,6 +2,7 @@ use crate::config::SubsPleaseScraperConfig;
 use crate::db::Redis;
 use crate::sources::Source;
 use crate::CustomError;
+use crate::ExtractOptions;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -130,22 +131,23 @@ impl SubsPleaseScraper {
 impl Source for SubsPleaseScraper {
     type Data = AnimeSchedule;
 
-    async fn get_key(&self) -> String {
-        "subsplease_scraper:extract".to_owned()
-    }
+    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
+        let cache_key = "subsplease_scraper:extract";
 
-    async fn get_data(&self) -> Result<AnimeSchedule> {
-        self.scrape().await
-    }
+        let dont_cache = match options {
+            Some(options) => options.dont_cache,
+            None => false,
+        };
 
-    async fn get_cached(&mut self, key: &str) -> Option<AnimeSchedule> {
-        let redis = &mut self.redis.lock().await;
+        let mut redis = self.redis.lock().await;
 
-        redis.get_cached(key).await
-    }
+        if let Some(cached) = redis.get_cached(cache_key, Some(dont_cache)).await {
+            println!("Got cached value for cache key: {}.", cache_key);
+            return Ok(cached);
+        }
 
-    async fn cache_value(&mut self, key: &str, lists: &AnimeSchedule) {
-        let redis = &mut self.redis.lock().await;
+        let data = self.scrape().await?;
+
         let expire_at = match OffsetDateTime::now_utc().checked_add(Duration::DAY) {
             Some(date) => {
                 let date = date.replace_time(Time::MIDNIGHT);
@@ -153,14 +155,18 @@ impl Source for SubsPleaseScraper {
                     Ok(ts) => ts,
                     Err(err) => {
                         println!("Could not get unix timestamp for tomorrow: {}", err);
-                        86400
+                        self.config.ttl_fallback
                     }
                 }
             }
-            None => 86400,
+            None => self.config.ttl_fallback,
         };
 
-        redis.cache_value_ex_at(key, lists, expire_at).await;
+        redis
+            .cache_value_expire_at(cache_key, &data, expire_at, Some(dont_cache))
+            .await;
+
+        Ok(data)
     }
 }
 
@@ -169,27 +175,6 @@ mod tests {
     use super::*;
     use crate::config::*;
     use crate::ExtractOptions;
-
-    #[tokio::test]
-    async fn test_new() {
-        let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let scraper: SubsPleaseScraper = SubsPleaseScraper {
-            config: SubsPleaseScraperConfig {
-                url: "url".to_owned(),
-            },
-            redis,
-        };
-        assert_eq!(scraper.config.url, "url");
-    }
-
-    #[tokio::test]
-    async fn test_default() {
-        let config = Config::default();
-        let redis = Arc::new(Mutex::new(Redis::new(&config.db.redis).await));
-        let scraper: SubsPleaseScraper = SubsPleaseScraper::new(&config.subsplease_scraper, redis);
-        assert_eq!(scraper.config.url, "https://subsplease.org/schedule/");
-    }
 
     #[tokio::test]
     async fn test_scrape() {

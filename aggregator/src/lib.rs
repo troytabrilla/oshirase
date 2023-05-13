@@ -47,6 +47,7 @@ pub struct ExtractOptions {
 
 pub struct RunOptions {
     pub extract_options: Option<ExtractOptions>,
+    pub dont_cache: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -71,7 +72,7 @@ impl Aggregator {
     }
 
     async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Data> {
-        let mut anilist_api = AniListAPI::new(&self.config.anilist_api, self.db.redis.clone());
+        let mut anilist_api = AniListAPI::new(&self.config.anilist_api);
         let mut subsplease_scraper =
             SubsPleaseScraper::new(&self.config.subsplease_scraper, self.db.redis.clone());
 
@@ -104,11 +105,7 @@ impl Aggregator {
         Ok(())
     }
 
-    // @todo Move caching behavior here as Cache trait and impl on Aggregator
-    // @todo Make Source trait require Cache trait
-    // @todo Disable caching in anilist_api (but keep get_key to use in Aggregator)
-    // @todo Cache overall results from run for 10 min
-    // @todo Add dont_cache to RunOptions
+    // @todo Cache overall results from run per user (anilist_api.get_cache_key) for 10 min (self.config.aggregator.ttl)
     pub async fn run(&mut self, options: Option<RunOptions>) -> Result<()> {
         let extract_options = match options {
             Some(options) => options.extract_options,
@@ -142,9 +139,14 @@ mod tests {
             .await
             .unwrap();
 
+        let redis_client = Redis::new(&config.db.redis).await.client;
+        let mut connection = redis_client.get_connection().unwrap();
+        redis::cmd("FLUSHALL").query::<()>(&mut connection).unwrap();
+
         let mut aggregator = Aggregator::new(&config).await;
         let options = RunOptions {
             extract_options: Some(ExtractOptions { dont_cache: true }),
+            dont_cache: Some(true),
         };
         aggregator.run(Some(options)).await.unwrap();
 

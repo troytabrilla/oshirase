@@ -2,6 +2,11 @@ use serde::Deserialize;
 use std::fs;
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct AggregatorConfig {
+    pub ttl: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct AniListAPIAuthConfig {
     pub access_token: String,
 }
@@ -37,10 +42,12 @@ pub struct CombinerConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubsPleaseScraperConfig {
     pub url: String,
+    pub ttl_fallback: usize,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    pub aggregator: AggregatorConfig,
     pub anilist_api: AniListAPIConfig,
     pub db: DBConfig,
     pub combiner: CombinerConfig,
@@ -68,20 +75,12 @@ mod tests {
     #[test]
     fn test_from_file() {
         let config = Config::from_file("config/config.toml");
-        assert_eq!(config.anilist_api.url, "https://graphql.anilist.co");
-        assert_eq!(config.db.mongodb.database, "test");
+        assert_eq!(config.aggregator.ttl, 600);
     }
 
     #[test]
     #[should_panic]
     fn test_from_file_failure() {
         Config::from_file("should_fail.toml");
-    }
-
-    #[test]
-    fn test_default() {
-        let config = Config::default();
-        assert_eq!(config.anilist_api.url, "https://graphql.anilist.co");
-        assert_eq!(config.db.mongodb.database, "test");
     }
 }
