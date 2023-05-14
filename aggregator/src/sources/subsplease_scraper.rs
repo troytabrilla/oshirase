@@ -25,7 +25,7 @@ pub enum Day {
 impl FromStr for Day {
     type Err = Box<CustomError>;
 
-    fn from_str(day: &str) -> std::result::Result<Day, Box<CustomError>> {
+    fn from_str(day: &str) -> std::result::Result<Day, Self::Err> {
         match day {
             "Sunday" => Ok(Day::Sunday),
             "Monday" => Ok(Day::Monday),
