@@ -109,7 +109,7 @@ impl SubsPleaseScraper {
         let tr = match tr {
             Ok(tr) => tr,
             Err(err) => {
-                println!("Could not parse selector: {}", err);
+                eprintln!("Could not parse selector: {}", err);
                 return Err(CustomError::boxed("Could not parse selector."));
             }
         };
