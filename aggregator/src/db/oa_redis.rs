@@ -292,17 +292,12 @@ mod tests {
             .await;
 
         let actual: usize = cacher.get_cached(key, None).await.unwrap();
-        println!("{} {}", actual, expected);
         assert_eq!(actual, expected);
 
         let actual_expire: usize = redis::cmd("TTL")
             .arg(key)
             .query(&mut redis.client.get_connection().unwrap())
             .unwrap();
-        println!(
-            "{} {} {}",
-            expected_expire_lower, actual_expire, expected_expire_higher
-        );
         assert!(actual_expire >= expected_expire_lower && actual_expire <= expected_expire_higher);
     }
 }
