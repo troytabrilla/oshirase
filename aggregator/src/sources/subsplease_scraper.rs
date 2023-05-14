@@ -6,11 +6,9 @@ use crate::ExtractOptions;
 use crate::Result;
 
 use async_trait::async_trait;
-use headless_chrome::Browser;
-use scraper::ElementRef;
-use scraper::{Html, Selector};
+use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
-use std::{error::Error, str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
@@ -25,9 +23,9 @@ pub enum Day {
 }
 
 impl FromStr for Day {
-    type Err = Box<dyn Error>;
+    type Err = Box<CustomError>;
 
-    fn from_str(day: &str) -> Result<Day> {
+    fn from_str(day: &str) -> std::result::Result<Day, Box<CustomError>> {
         match day {
             "Sunday" => Ok(Day::Sunday),
             "Monday" => Ok(Day::Monday),
@@ -57,15 +55,15 @@ pub struct SubsPleaseScraper {
 }
 
 impl SubsPleaseScraper {
-    pub fn new(config: &SubsPleaseScraperConfig, db: &DB) -> SubsPleaseScraper {
+    pub fn new(config: SubsPleaseScraperConfig, db: &DB) -> SubsPleaseScraper {
         SubsPleaseScraper {
-            config: config.clone(),
+            config,
             redis: db.redis.clone(),
         }
     }
 
     fn load_schedule_table(&self) -> Result<Html> {
-        let browser = Browser::default()?;
+        let browser = headless_chrome::Browser::default()?;
         let tab = browser.new_tab()?;
 
         tab.navigate_to(&self.config.url)?
@@ -98,7 +96,15 @@ impl SubsPleaseScraper {
         let mut days: AnimeSchedule = AnimeSchedule(Vec::new());
         let mut current_day: Option<Day> = None;
 
-        let tr = Selector::parse("tr")?;
+        let tr = Selector::parse("tr");
+
+        let tr = match tr {
+            Ok(tr) => tr,
+            Err(err) => {
+                println!("Could not parse selector: {}", err);
+                return Err(CustomError::boxed("Could not parse selector."));
+            }
+        };
 
         for element in table.select(&tr) {
             if let Some(class) = element.value().attr("class") {
@@ -128,7 +134,9 @@ impl SubsPleaseScraper {
 impl Source for SubsPleaseScraper {
     type Data = AnimeSchedule;
 
-    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&mut self, options: Option<ExtractOptions>) -> Result<Self::Data> {
+        println!("subsplease_scraper:extract:start");
+
         let cache_key = "subsplease_scraper:extract";
 
         let dont_cache = match options {
@@ -149,6 +157,8 @@ impl Source for SubsPleaseScraper {
             .cache_value_expire_tomorrow(cache_key, &data, Some(dont_cache))
             .await;
 
+        println!("subsplease_scraper:extract:end");
+
         Ok(data)
     }
 }
@@ -163,7 +173,7 @@ mod tests {
     async fn test_scrape() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let scraper = SubsPleaseScraper::new(&config.subsplease_scraper, &db);
+        let scraper = SubsPleaseScraper::new(config.subsplease_scraper, &db);
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.0.is_empty());
     }
@@ -172,11 +182,11 @@ mod tests {
     async fn test_extract() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let mut scraper = SubsPleaseScraper::new(&config.subsplease_scraper, &db);
+        let mut scraper = SubsPleaseScraper::new(config.subsplease_scraper, &db);
         let options = ExtractOptions {
             dont_cache: Some(true),
         };
-        let actual = scraper.extract(Some(&options)).await.unwrap();
+        let actual = scraper.extract(Some(options)).await.unwrap();
         assert!(!actual.0.is_empty());
     }
 }

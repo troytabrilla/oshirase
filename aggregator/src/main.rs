@@ -1,4 +1,5 @@
-use aggregator::{config::Config, Aggregator, ExtractOptions, Result, RunOptions};
+use aggregator::*;
+use config::*;
 
 use clap::Parser;
 
@@ -34,7 +35,7 @@ async fn main() -> Result<()> {
         }),
     };
 
-    let data = Aggregator::new(&config).await.run(Some(options)).await?;
+    let data = Aggregator::new(config).await.run(Some(options)).await?;
 
     if cli.print {
         println!("{:?}", data);

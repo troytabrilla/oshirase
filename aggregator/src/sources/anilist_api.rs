@@ -8,9 +8,7 @@ use crate::Result;
 
 use async_trait::async_trait;
 use graphql_client::GraphQLQuery;
-use reqwest;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -68,9 +66,9 @@ pub struct AniListAPI {
 }
 
 impl AniListAPI {
-    pub fn new(config: &AniListAPIConfig, db: &DB) -> AniListAPI {
+    pub fn new(config: AniListAPIConfig, db: &DB) -> AniListAPI {
         AniListAPI {
-            config: config.clone(),
+            config,
             redis: db.redis.clone(),
         }
     }
@@ -212,13 +210,13 @@ impl AniListAPI {
         Ok(lists)
     }
 
-    pub async fn get_cache_key(&self, key: &str, user: Option<User>) -> Result<String> {
-        let user = match user {
-            Some(user) => user,
-            None => self.fetch_user().await?,
+    pub async fn get_cache_key(&self, key: &str, user: Option<&User>) -> Result<String> {
+        let user_id = match user {
+            Some(user) => user.id,
+            None => self.fetch_user().await?.id,
         };
 
-        Ok(format!("{}:{}", key, user.id))
+        Ok(format!("{}:{}", key, user_id))
     }
 }
 
@@ -226,11 +224,13 @@ impl AniListAPI {
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&mut self, options: Option<ExtractOptions>) -> Result<Self::Data> {
         let user = self.fetch_user().await?;
 
+        println!("anilist_api:extract:{}:start", user.id);
+
         let cache_key = self
-            .get_cache_key("anilist_api:skip_full", Some(user.clone()))
+            .get_cache_key("anilist_api:skip_full", Some(&user))
             .await?;
 
         let dont_cache = match options {
@@ -251,6 +251,8 @@ impl Source for AniListAPI {
             .cache_value_expire_tomorrow::<bool>(&cache_key, &true, Some(dont_cache))
             .await;
 
+        println!("anilist_api:extract:{}:start:end", user.id);
+
         Ok(data)
     }
 }
@@ -258,13 +260,13 @@ impl Source for AniListAPI {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::*;
+    use crate::config::Config;
 
     #[tokio::test]
     async fn test_fetch_user() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let api = AniListAPI::new(&config.anilist_api, &db);
+        let api = AniListAPI::new(config.anilist_api, &db);
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
     }
@@ -273,7 +275,7 @@ mod tests {
     async fn test_fetch_lists() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let api = AniListAPI::new(&config.anilist_api, &db);
+        let api = AniListAPI::new(config.anilist_api, &db);
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id, false).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -284,11 +286,11 @@ mod tests {
     async fn test_extract() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let mut api = AniListAPI::new(&config.anilist_api, &db);
+        let mut api = AniListAPI::new(config.anilist_api, &db);
         let options = ExtractOptions {
             dont_cache: Some(true),
         };
-        let actual = api.extract(Some(&options)).await.unwrap();
+        let actual = api.extract(Some(options)).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

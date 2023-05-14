@@ -3,17 +3,13 @@ use crate::sources::anilist_api::Media;
 use crate::sources::subsplease_scraper::AnimeScheduleEntry;
 use crate::Result;
 
-use strsim::normalized_levenshtein;
-
 pub struct Combiner {
     config: CombinerConfig,
 }
 
 impl Combiner {
-    pub fn new(config: &CombinerConfig) -> Combiner {
-        Combiner {
-            config: config.clone(),
-        }
+    pub fn new(config: CombinerConfig) -> Combiner {
+        Combiner { config }
     }
 
     pub fn combine<'a>(
@@ -36,8 +32,9 @@ impl Combiner {
                     let mut score_schedule_tuple: (f64, Option<&AnimeScheduleEntry>) =
                         (-f64::INFINITY, None);
                     for schedule in schedules {
-                        let score = normalized_levenshtein(anime_title, &schedule.title);
-                        let alt_score = normalized_levenshtein(anime_alt_title, &schedule.title);
+                        let score = strsim::normalized_levenshtein(anime_title, &schedule.title);
+                        let alt_score =
+                            strsim::normalized_levenshtein(anime_alt_title, &schedule.title);
                         if score > self.config.similarity_threshold
                             && score > score_schedule_tuple.0
                         {
@@ -63,7 +60,7 @@ impl Default for Combiner {
     fn default() -> Self {
         let config = Config::default();
 
-        Combiner::new(&config.combiner)
+        Combiner::new(config.combiner)
     }
 }
 

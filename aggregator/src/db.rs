@@ -2,14 +2,12 @@ use crate::config::{Config, DBConfig, MongoDBConfig, RedisConfig};
 use crate::CustomError;
 use crate::Result;
 
-use bson::to_document;
 use futures::future::try_join_all;
 use mongodb::{
     bson::doc,
     options::{ClientOptions, FindOneAndUpdateOptions, ServerAddress},
 };
-#[allow(unused_imports)]
-use redis::{aio::ConnectionManager, AsyncCommands, Client, Commands, FromRedisValue, ToRedisArgs};
+use redis::{aio::ConnectionManager, AsyncCommands, Client, FromRedisValue, ToRedisArgs};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::hash_map::DefaultHasher,
@@ -26,8 +24,9 @@ pub struct MongoDB {
 
 pub trait Document: DeserializeOwned + Serialize + Hash + Unpin + Send + Sync {}
 
+// @todo Refactor mongodb and redis into different files
 impl MongoDB {
-    pub fn new(config: &MongoDBConfig) -> MongoDB {
+    pub fn new(config: MongoDBConfig) -> MongoDB {
         let address = ServerAddress::parse(&config.host).unwrap();
         let hosts = vec![address];
         let options = ClientOptions::builder()
@@ -36,10 +35,7 @@ impl MongoDB {
             .build();
         let client = mongodb::Client::with_options(options).unwrap();
 
-        MongoDB {
-            client,
-            config: config.clone(),
-        }
+        MongoDB { client, config }
     }
 
     fn hash_document<T>(document: &T) -> String
@@ -72,7 +68,7 @@ impl MongoDB {
             let existing = collection.find_one(doc! { "hash": &hash }, None).await?;
 
             if existing.is_none() {
-                let mut document = to_document(document)?;
+                let mut document = bson::to_document(document)?;
                 document.extend(doc! { "modified": bson::DateTime::now(), "hash": &hash });
 
                 let id = document
@@ -97,7 +93,7 @@ impl Default for MongoDB {
     fn default() -> MongoDB {
         let config = Config::default();
 
-        Self::new(&config.db.mongodb)
+        Self::new(config.db.mongodb)
     }
 }
 
@@ -108,14 +104,14 @@ pub struct Redis {
 }
 
 impl Redis {
-    pub async fn new(config: &RedisConfig) -> Redis {
+    pub async fn new(config: RedisConfig) -> Redis {
         let client = Client::open(config.host.as_str()).unwrap();
         let connection_manager = client.get_tokio_connection_manager().await.unwrap();
 
         Redis {
             client,
             connection_manager,
-            config: config.clone(),
+            config,
         }
     }
 
@@ -130,20 +126,18 @@ impl Redis {
 
     async fn set_ex<T>(&mut self, key: &str, value: &T, seconds: usize) -> Result<()>
     where
-        T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
+        T: ToRedisArgs + Sync + Clone,
     {
-        self.connection_manager
-            .set_ex(key, &(*value).clone(), seconds)
-            .await?;
+        self.connection_manager.set_ex(key, value, seconds).await?;
 
         Ok(())
     }
 
     async fn set_ex_at<T>(&mut self, key: &str, value: &T, expire_at: usize) -> Result<()>
     where
-        T: ToRedisArgs + std::marker::Sync + std::clone::Clone,
+        T: ToRedisArgs + Sync + Clone,
     {
-        self.connection_manager.set(key, &(*value).clone()).await?;
+        self.connection_manager.set(key, value).await?;
         self.connection_manager.expire_at(key, expire_at).await?;
 
         Ok(())
@@ -268,8 +262,8 @@ pub struct DB {
 impl DB {
     pub async fn new(config: &DBConfig) -> DB {
         DB {
-            mongodb: Arc::new(Mutex::new(MongoDB::new(&config.mongodb))),
-            redis: Arc::new(Mutex::new(Redis::new(&config.redis).await)),
+            mongodb: Arc::new(Mutex::new(MongoDB::new(config.mongodb.clone()))),
+            redis: Arc::new(Mutex::new(Redis::new(config.redis.clone()).await)),
         }
     }
 }
@@ -318,7 +312,7 @@ mod tests {
     async fn test_redis_cache() {
         let key = "test_redis_cache";
         let config = Config::default();
-        let mut redis = Redis::new(&config.db.redis).await;
+        let mut redis = Redis::new(config.db.redis).await;
         let expected = 420;
         redis.cache_value_expire(key, &expected, 10, None).await;
         let actual: i32 = redis.get_cached(key, None).await.unwrap();
@@ -329,7 +323,7 @@ mod tests {
     async fn test_redis_cache_at() {
         let key = "test_redis_cache_at";
         let config = Config::default();
-        let mut redis = Redis::new(&config.db.redis).await;
+        let mut redis = Redis::new(config.db.redis).await;
         let expected = 420;
         let expire_at =
             usize::try_from(time::OffsetDateTime::now_utc().unix_timestamp()).unwrap() + 10;

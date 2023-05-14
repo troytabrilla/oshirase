@@ -7,14 +7,16 @@ use anilist_api::*;
 use combiner::*;
 use config::*;
 use db::*;
-use serde::{Deserialize, Serialize};
 use sources::*;
 use subsplease_scraper::*;
 
-use std::{error::Error, fmt};
-use tokio::try_join;
+use serde::{Deserialize, Serialize};
+use std::{
+    error::Error,
+    fmt::{Display, Formatter, Result as FmtResult},
+};
 
-pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
+pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
 #[derive(Debug)]
 pub struct CustomError {
@@ -33,8 +35,8 @@ impl CustomError {
     }
 }
 
-impl fmt::Display for CustomError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for CustomError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "{}", self.message)
     }
 }
@@ -57,36 +59,46 @@ pub struct Data {
     schedule: AnimeSchedule,
 }
 
-pub struct Aggregator {
-    config: Config,
-    db: DB,
+pub struct Sources {
     anilist_api: AniListAPI,
     subsplease_scraper: SubsPleaseScraper,
 }
 
-impl Aggregator {
-    pub async fn new(config: &Config) -> Aggregator {
-        let db = DB::new(&config.db).await;
-        let anilist_api = AniListAPI::new(&config.anilist_api, &db);
-        let subsplease_scraper = SubsPleaseScraper::new(&config.subsplease_scraper, &db);
+pub struct Aggregator {
+    config: Config,
+    db: DB,
+}
 
-        Aggregator {
-            config: config.clone(),
-            db,
-            anilist_api,
-            subsplease_scraper,
-        }
+impl Aggregator {
+    pub async fn new(config: Config) -> Aggregator {
+        let db = DB::new(&config.db).await;
+
+        Aggregator { config, db }
     }
 
-    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Data> {
-        let lists = self.anilist_api.extract(options).await?;
-        let schedule = self.subsplease_scraper.extract(options).await?;
+    async fn extract(
+        &mut self,
+        mut sources: Sources,
+        options: Option<ExtractOptions>,
+    ) -> Result<Data> {
+        let lists_options = options.clone();
+        let lists_handle =
+            tokio::spawn(async move { sources.anilist_api.extract(lists_options).await });
+
+        let schedule_options = options.clone();
+        let schedule_handle =
+            tokio::spawn(async move { sources.subsplease_scraper.extract(schedule_options).await });
+
+        let (lists, schedule) = tokio::join!(lists_handle, schedule_handle);
+
+        let lists = lists??;
+        let schedule = schedule??;
 
         Ok(Data { lists, schedule })
     }
 
     async fn transform(&mut self, mut data: Data) -> Result<Data> {
-        let combiner = Combiner::new(&self.config.combiner);
+        let combiner = Combiner::new(self.config.combiner.clone());
 
         let anime = &mut data.lists.anime;
         let schedule = &data.schedule.0;
@@ -103,18 +115,26 @@ impl Aggregator {
         let anime_future = mongodb.upsert_documents("anime", "media_id", &data.lists.anime);
         let manga_future = mongodb.upsert_documents("manga", "media_id", &data.lists.manga);
 
-        try_join!(anime_future, manga_future)?;
+        tokio::try_join!(anime_future, manga_future)?;
 
         Ok(())
     }
 
     pub async fn run(&mut self, options: Option<RunOptions>) -> Result<Data> {
+        let sources = Sources {
+            anilist_api: AniListAPI::new(self.config.anilist_api.clone(), &self.db),
+            subsplease_scraper: SubsPleaseScraper::new(
+                self.config.subsplease_scraper.clone(),
+                &self.db,
+            ),
+        };
+
         let (dont_cache, extract_options) = match options {
             Some(options) => (options.dont_cache.unwrap_or(false), options.extract_options),
             None => (false, None),
         };
 
-        let cache_key = self
+        let cache_key = sources
             .anilist_api
             .get_cache_key("aggregator:run", None)
             .await?;
@@ -130,7 +150,7 @@ impl Aggregator {
         // Release lock on redis so sources can cache results as necessary
         drop(redis);
 
-        let data = self.extract(extract_options.as_ref()).await?;
+        let data = self.extract(sources, extract_options).await?;
         let data = self.transform(data).await?;
         self.load(&data).await?;
 
@@ -157,7 +177,7 @@ mod tests {
     #[tokio::test]
     async fn test_run() {
         let config = Config::default();
-        let mongodb = MongoDB::new(&config.db.mongodb);
+        let mongodb = MongoDB::new(config.db.mongodb.clone());
         let database = mongodb.client.database("test");
         database
             .collection::<Media>("anime")
@@ -170,11 +190,11 @@ mod tests {
             .await
             .unwrap();
 
-        let redis_client = Redis::new(&config.db.redis).await.client;
+        let redis_client = Redis::new(config.db.redis.clone()).await.client;
         let mut connection = redis_client.get_connection().unwrap();
         redis::cmd("FLUSHALL").query::<()>(&mut connection).unwrap();
 
-        let mut aggregator = Aggregator::new(&config).await;
+        let mut aggregator = Aggregator::new(config).await;
         let options = RunOptions {
             extract_options: Some(ExtractOptions {
                 dont_cache: Some(true),
