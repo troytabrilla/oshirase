@@ -140,31 +140,31 @@ impl Aggregator {
             .get_cache_key("aggregator:run", None)
             .await?;
 
-        let redis = self.db.redis.clone();
-        let mut redis = redis.lock().await;
-
-        if let Some(cached) = redis.get_cached::<Data>(&cache_key, Some(dont_cache)).await {
-            println!("Got cached value for cache key: {}.", cache_key);
-            return Ok(cached);
+        {
+            let redis = self.db.redis.clone();
+            let mut redis = redis.lock().await;
+            if let Some(cached) = redis.get_cached::<Data>(&cache_key, Some(dont_cache)).await {
+                println!("Got cached value for cache key: {}.", cache_key);
+                return Ok(cached);
+            }
         }
-
-        // Release lock on redis so sources can cache results as necessary
-        drop(redis);
 
         let data = self.extract(sources, extract_options).await?;
         let data = self.transform(data).await?;
         self.load(&data).await?;
 
-        let redis = self.db.redis.clone();
-        let mut redis = redis.lock().await;
-        redis
-            .cache_value_expire(
-                &cache_key,
-                &data,
-                self.config.aggregator.ttl,
-                Some(dont_cache),
-            )
-            .await;
+        {
+            let redis = self.db.redis.clone();
+            let mut redis = redis.lock().await;
+            redis
+                .cache_value_expire(
+                    &cache_key,
+                    &data,
+                    self.config.aggregator.ttl,
+                    Some(dont_cache),
+                )
+                .await;
+        }
 
         Ok(data)
     }

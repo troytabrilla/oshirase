@@ -59,15 +59,26 @@ impl SubsPleaseScraper {
         SubsPleaseScraper { config, redis }
     }
 
-    fn load_schedule_table(&self) -> Result<Html> {
-        let browser = headless_chrome::Browser::default()?;
-        let tab = browser.new_tab()?;
+    async fn load_schedule_table(&self) -> Result<Html> {
+        let mut caps = serde_json::map::Map::new();
+        let chrome_opts: Vec<&str> = self.config.chrome_options.split_whitespace().collect();
+        let chrome_opts = serde_json::json!({ "args": chrome_opts });
+        caps.insert("goog:chromeOptions".to_string(), chrome_opts.clone());
 
-        tab.navigate_to(&self.config.url)?
-            .wait_until_navigated()?
-            .wait_for_element(".day-of-week")?;
-
-        let table = tab.find_element("#full-schedule-table")?.get_content()?;
+        let client = fantoccini::ClientBuilder::native()
+            .capabilities(caps)
+            .connect(&self.config.webdriver_url)
+            .await?;
+        client.goto(&self.config.url).await?;
+        let locator = fantoccini::Locator::Css(".day-of-week");
+        let table = client
+            .wait()
+            .for_element(locator)
+            .await?
+            .find(fantoccini::Locator::Id("full-schedule-table"))
+            .await?
+            .html(false)
+            .await?;
         let table = Html::parse_fragment(&table);
 
         Ok(table)
@@ -88,7 +99,7 @@ impl SubsPleaseScraper {
     }
 
     async fn scrape(&self) -> Result<AnimeSchedule> {
-        let table = self.load_schedule_table()?;
+        let table = self.load_schedule_table().await?;
 
         let mut days: AnimeSchedule = AnimeSchedule(Vec::new());
         let mut current_day: Option<Day> = None;
@@ -132,8 +143,6 @@ impl Source for SubsPleaseScraper {
     type Data = AnimeSchedule;
 
     async fn extract(&mut self, options: Option<ExtractOptions>) -> Result<Self::Data> {
-        println!("subsplease_scraper:extract:start");
-
         let cache_key = "subsplease_scraper:extract";
 
         let dont_cache = match options {
@@ -141,20 +150,22 @@ impl Source for SubsPleaseScraper {
             None => false,
         };
 
-        let mut redis = self.redis.lock().await;
-
-        if let Some(cached) = redis.get_cached(cache_key, Some(dont_cache)).await {
-            println!("Got cached value for cache key: {}.", cache_key);
-            return Ok(cached);
+        {
+            let mut redis = self.redis.lock().await;
+            if let Some(cached) = redis.get_cached(cache_key, Some(dont_cache)).await {
+                println!("Got cached value for cache key: {}.", cache_key);
+                return Ok(cached);
+            }
         }
 
         let data = self.scrape().await?;
 
-        redis
-            .cache_value_expire_tomorrow(cache_key, &data, Some(dont_cache))
-            .await;
-
-        println!("subsplease_scraper:extract:end");
+        {
+            let mut redis = self.redis.lock().await;
+            redis
+                .cache_value_expire_tomorrow(cache_key, &data, Some(dont_cache))
+                .await;
+        }
 
         Ok(data)
     }

@@ -9,9 +9,9 @@ edition = "2021"
 async-trait = "0.1"
 bson = "2.6"
 clap = { version = "4.2", features = ["derive"] }
+fantoccini = "0.19"
 futures = "0.3"
 graphql_client = "0.12"
-headless_chrome = "1.0"
 mongodb = "2.5"
 redis = { version = "0.23", features = ["tokio-comp", "connection-manager"] }
 regex = "1.8"

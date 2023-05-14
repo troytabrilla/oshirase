@@ -43,6 +43,8 @@ pub struct CombinerConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubsPleaseScraperConfig {
     pub url: String,
+    pub webdriver_url: String,
+    pub chrome_options: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]

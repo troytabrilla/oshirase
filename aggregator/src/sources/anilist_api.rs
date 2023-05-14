@@ -224,8 +224,6 @@ impl Source for AniListAPI {
     async fn extract(&mut self, options: Option<ExtractOptions>) -> Result<Self::Data> {
         let user = self.fetch_user().await?;
 
-        println!("anilist_api:extract:{}:start", user.id);
-
         let cache_key = self
             .get_cache_key("anilist_api:skip_full", Some(&user))
             .await?;
@@ -242,13 +240,17 @@ impl Source for AniListAPI {
             .await
             .is_some();
 
+        // Release lock on redis
+        drop(redis);
+
         let data = self.fetch_lists(user.id, skip_full).await?;
 
-        redis
-            .cache_value_expire_tomorrow::<bool>(&cache_key, &true, Some(dont_cache))
-            .await;
-
-        println!("anilist_api:extract:{}:start:end", user.id);
+        {
+            let mut redis = self.redis.lock().await;
+            redis
+                .cache_value_expire_tomorrow::<bool>(&cache_key, &true, Some(dont_cache))
+                .await;
+        }
 
         Ok(data)
     }
