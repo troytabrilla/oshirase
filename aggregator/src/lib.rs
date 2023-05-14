@@ -1,11 +1,12 @@
 mod combiner;
-pub mod config;
+mod config;
 mod db;
 mod sources;
 
+pub use config::Config;
+
 use anilist_api::*;
 use combiner::*;
-use config::*;
 use db::*;
 use sources::*;
 use subsplease_scraper::*;

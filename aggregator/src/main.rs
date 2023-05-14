@@ -1,5 +1,4 @@
 use aggregator::*;
-use config::*;
 
 use clap::Parser;
 
