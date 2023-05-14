@@ -82,18 +82,13 @@ impl Aggregator {
         mut sources: Sources,
         options: Option<ExtractOptions>,
     ) -> Result<Data> {
-        let lists_options = options.clone();
-        let lists_handle =
-            tokio::spawn(async move { sources.anilist_api.extract(lists_options).await });
+        let (lists, schedule) = tokio::join!(
+            sources.anilist_api.extract(options.clone()),
+            sources.subsplease_scraper.extract(options.clone())
+        );
 
-        let schedule_options = options.clone();
-        let schedule_handle =
-            tokio::spawn(async move { sources.subsplease_scraper.extract(schedule_options).await });
-
-        let (lists, schedule) = tokio::join!(lists_handle, schedule_handle);
-
-        let lists = lists??;
-        let schedule = schedule??;
+        let lists = lists?;
+        let schedule = schedule?;
 
         Ok(Data { lists, schedule })
     }
