@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use futures::future::try_join_all;
 use mongodb::{
     bson::doc,
-    options::{ClientOptions, FindOneAndUpdateOptions, ServerAddress},
+    options::{ClientOptions, FindOneAndUpdateOptions, IndexOptions, ServerAddress},
+    IndexModel,
 };
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
@@ -66,27 +67,35 @@ pub trait Persist {
         let database = self.get_client().database(&self.get_database());
         let collection = database.collection::<T>(collection);
 
+        let index_options = IndexOptions::builder().unique(true).build();
+        let id_index = IndexModel::builder()
+            .keys(doc! { format!("{}", id_key): 1 })
+            .options(index_options.clone())
+            .build();
+        collection.create_index(id_index, None).await?;
+        let hash_index = IndexModel::builder()
+            .keys(doc! { "hash": 1 })
+            .options(index_options)
+            .build();
+        collection.create_index(hash_index, None).await?;
+
         let mut futures = Vec::new();
 
         for document in documents {
             let hash = Self::hash_document(document);
 
-            // @todo Use atomic operations
-            let existing = collection.find_one(doc! { "hash": &hash }, None).await?;
-            if existing.is_none() {
-                let mut document = bson::to_document(document)?;
-                document.extend(doc! { "modified": bson::DateTime::now(), "hash": &hash });
+            let mut document = bson::to_document(document)?;
+            document.extend(doc! { "modified": bson::DateTime::now(), "hash": &hash });
 
-                let id = document
-                    .get(id_key)
-                    .ok_or(CustomError::boxed(&format!("Could not find {}.", id_key)))?;
+            let id = document
+                .get(id_key)
+                .ok_or(CustomError::boxed(&format!("Could not find {}.", id_key)))?;
 
-                futures.push(collection.find_one_and_update(
-                    doc! { format!("{}", id_key): id },
-                    doc! { "$set": document },
-                    FindOneAndUpdateOptions::builder().upsert(true).build(),
-                ));
-            }
+            futures.push(collection.find_one_and_update(
+                doc! { format!("{}", id_key): id },
+                doc! { "$set": document },
+                FindOneAndUpdateOptions::builder().upsert(true).build(),
+            ));
         }
 
         try_join_all(futures).await?;
@@ -98,11 +107,13 @@ pub trait Persist {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::TryStreamExt;
     use serde::{Deserialize, Serialize};
 
-    #[derive(Hash, PartialEq, Serialize, Deserialize)]
+    #[derive(Debug, Hash, PartialEq, Serialize, Deserialize)]
     struct Test {
         test: String,
+        extra: u8,
     }
     impl Document for Test {}
 
@@ -138,16 +149,36 @@ mod tests {
                 "test",
                 &vec![Test {
                     test: "test".to_owned(),
+                    extra: 21,
                 }],
             )
             .await
             .unwrap();
-
-        let count = collection
-            .count_documents(doc! { "test": "test" }, None)
+        let docs = collection
+            .find(doc! { "test": "test" }, None)
             .await
             .unwrap();
+        let docs: Vec<Test> = docs.try_collect().await.unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].extra, 21);
 
-        assert_eq!(count, 1);
+        persister
+            .upsert_documents(
+                "test",
+                "test",
+                &vec![Test {
+                    test: "test".to_owned(),
+                    extra: 42,
+                }],
+            )
+            .await
+            .unwrap();
+        let docs = collection
+            .find(doc! { "test": "test" }, None)
+            .await
+            .unwrap();
+        let docs: Vec<Test> = docs.try_collect().await.unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].extra, 42);
     }
 }
