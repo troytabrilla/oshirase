@@ -1,5 +1,6 @@
 use crate::config::SubsPleaseScraperConfig;
 use crate::db::Redis;
+use crate::emitter::Extra;
 use crate::sources::Source;
 use crate::CustomError;
 use crate::ExtractOptions;
@@ -44,6 +45,12 @@ pub struct AnimeScheduleEntry {
     pub title: String,
     pub day: Day,
     pub time: String,
+}
+
+impl Extra for AnimeScheduleEntry {
+    fn get_title(&self) -> String {
+        self.title.clone()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

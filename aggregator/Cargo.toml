@@ -9,6 +9,8 @@ edition = "2021"
 async-trait = "0.1"
 bson = "2.6"
 clap = { version = "4.2", features = ["derive"] }
+crossbeam = "0.8"
+crossbeam-channel = "0.5"
 fantoccini = "0.19"
 futures = "0.3"
 graphql_client = "0.12"

@@ -1,16 +1,17 @@
-mod combiner;
 mod config;
 mod db;
+mod emitter;
 mod sources;
 
 pub use config::Config;
 
 use anilist_api::*;
-use combiner::*;
 use db::*;
+use emitter::*;
 use sources::*;
 use subsplease_scraper::*;
 
+use crossbeam_channel::bounded;
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
@@ -93,14 +94,47 @@ impl Aggregator {
         Ok(Data { lists, schedule })
     }
 
-    async fn transform(&mut self, mut data: Data) -> Result<Data> {
-        let combiner = Combiner::new(self.config.combiner.clone());
+    fn transform(&mut self, mut data: Data) -> Result<Data> {
+        let emitter = Emitter::new(self.config.emitter.clone());
+        let (snd, rcv) = bounded::<Emitted>(16);
 
-        let anime = &mut data.lists.anime;
-        let schedule = &data.schedule.0;
+        let media_lite: Vec<MediaLite> = data
+            .lists
+            .anime
+            .iter()
+            .map(|a: &Media| MediaLite {
+                title: a.title.clone().unwrap_or(String::new()),
+                alt_title: a.alt_title.clone().unwrap_or(String::new()),
+                status: a.status.clone().unwrap_or(String::new()),
+            })
+            .collect();
 
-        let anime = combiner.combine(anime, schedule)?;
-        data.lists.anime = anime.to_vec();
+        let handle = crossbeam::scope(|s| {
+            // Future sources should spawn new threads to emit data to combine to main lists
+            s.spawn(|_| {
+                if let Err(err) = emitter.emit(&media_lite, &data.schedule.0, "schedule", snd) {
+                    eprintln!("Error occurred in emitter thread: {}.", err);
+                }
+            });
+
+            for msg in rcv.iter() {
+                let extra = serde_json::from_str(&msg.json);
+                match extra {
+                    Ok(extra) => {
+                        if msg.key == "schedule" {
+                            data.lists.anime[msg.index].schedule = extra;
+                        }
+                    }
+                    Err(err) => {
+                        eprintln!("{}", err);
+                    }
+                }
+            }
+        });
+
+        if let Err(err) = handle {
+            eprintln!("{:?}", err);
+        }
 
         Ok(data)
     }
@@ -145,7 +179,7 @@ impl Aggregator {
         }
 
         let data = self.extract(sources, extract_options).await?;
-        let data = self.transform(data).await?;
+        let data = self.transform(data)?;
         self.load(&data).await?;
 
         {
