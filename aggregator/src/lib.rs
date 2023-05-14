@@ -140,10 +140,8 @@ impl Aggregator {
     }
 
     async fn load(&self, data: &Data) -> Result<()> {
-        let mongodb = self.db.mongodb.lock().await;
-
-        let anime_future = mongodb.upsert_documents("anime", "media_id", &data.lists.anime);
-        let manga_future = mongodb.upsert_documents("manga", "media_id", &data.lists.manga);
+        let anime_future = self.upsert_documents("anime", "media_id", &data.lists.anime);
+        let manga_future = self.upsert_documents("manga", "media_id", &data.lists.manga);
 
         tokio::try_join!(anime_future, manga_future)?;
 
@@ -152,10 +150,13 @@ impl Aggregator {
 
     pub async fn run(&mut self, options: Option<RunOptions>) -> Result<Data> {
         let sources = Sources {
-            anilist_api: AniListAPI::new(self.config.anilist_api.clone(), self.db.redis.clone()),
+            anilist_api: AniListAPI::new(
+                self.config.anilist_api.clone(),
+                self.db.redis.connection_manager.clone(),
+            ),
             subsplease_scraper: SubsPleaseScraper::new(
                 self.config.subsplease_scraper.clone(),
-                self.db.redis.clone(),
+                self.db.redis.connection_manager.clone(),
             ),
         };
 
@@ -169,33 +170,40 @@ impl Aggregator {
             .get_cache_key("aggregator:run", None)
             .await?;
 
-        {
-            let redis = self.db.redis.clone();
-            let mut redis = redis.lock().await;
-            if let Some(cached) = redis.get_cached::<Data>(&cache_key, Some(dont_cache)).await {
-                println!("Got cached value for cache key: {}.", cache_key);
-                return Ok(cached);
-            }
+        if let Some(cached) = self.get_cached::<Data>(&cache_key, Some(dont_cache)).await {
+            println!("Got cached value for cache key: {}.", cache_key);
+            return Ok(cached);
         }
 
         let data = self.extract(sources, extract_options).await?;
         let data = self.transform(data)?;
         self.load(&data).await?;
 
-        {
-            let redis = self.db.redis.clone();
-            let mut redis = redis.lock().await;
-            redis
-                .cache_value_expire(
-                    &cache_key,
-                    &data,
-                    self.config.aggregator.ttl,
-                    Some(dont_cache),
-                )
-                .await;
-        }
+        self.cache_value_expire(
+            &cache_key,
+            &data,
+            self.config.aggregator.ttl,
+            Some(dont_cache),
+        )
+        .await;
 
         Ok(data)
+    }
+}
+
+impl Persist for Aggregator {
+    fn get_client(&self) -> &mongodb::Client {
+        &self.db.mongodb.client
+    }
+
+    fn get_database(&self) -> String {
+        self.config.db.mongodb.database.to_owned()
+    }
+}
+
+impl Cache for Aggregator {
+    fn get_connection_manager(&mut self) -> &mut redis::aio::ConnectionManager {
+        &mut self.db.redis.connection_manager
     }
 }
 

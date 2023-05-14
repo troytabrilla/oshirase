@@ -1,5 +1,5 @@
 use crate::config::SubsPleaseScraperConfig;
-use crate::db::Redis;
+use crate::db::Cache;
 use crate::emitter::Extra;
 use crate::sources::Source;
 use crate::CustomError;
@@ -9,8 +9,7 @@ use crate::Result;
 use async_trait::async_trait;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
-use std::{str::FromStr, sync::Arc};
-use tokio::sync::Mutex;
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub enum Day {
@@ -58,11 +57,14 @@ pub struct AnimeSchedule(pub Vec<AnimeScheduleEntry>);
 
 pub struct SubsPleaseScraper {
     config: SubsPleaseScraperConfig,
-    redis: Arc<Mutex<Redis>>,
+    redis: redis::aio::ConnectionManager,
 }
 
 impl SubsPleaseScraper {
-    pub fn new(config: SubsPleaseScraperConfig, redis: Arc<Mutex<Redis>>) -> SubsPleaseScraper {
+    pub fn new(
+        config: SubsPleaseScraperConfig,
+        redis: redis::aio::ConnectionManager,
+    ) -> SubsPleaseScraper {
         SubsPleaseScraper { config, redis }
     }
 
@@ -146,6 +148,13 @@ impl SubsPleaseScraper {
 }
 
 #[async_trait]
+impl Cache for SubsPleaseScraper {
+    fn get_connection_manager(&mut self) -> &mut redis::aio::ConnectionManager {
+        &mut self.redis
+    }
+}
+
+#[async_trait]
 impl Source for SubsPleaseScraper {
     type Data = AnimeSchedule;
 
@@ -157,22 +166,15 @@ impl Source for SubsPleaseScraper {
             None => false,
         };
 
-        {
-            let mut redis = self.redis.lock().await;
-            if let Some(cached) = redis.get_cached(cache_key, Some(dont_cache)).await {
-                println!("Got cached value for cache key: {}.", cache_key);
-                return Ok(cached);
-            }
+        if let Some(cached) = self.get_cached(cache_key, Some(dont_cache)).await {
+            println!("Got cached value for cache key: {}.", cache_key);
+            return Ok(cached);
         }
 
         let data = self.scrape().await?;
 
-        {
-            let mut redis = self.redis.lock().await;
-            redis
-                .cache_value_expire_tomorrow(cache_key, &data, Some(dont_cache))
-                .await;
-        }
+        self.cache_value_expire_tomorrow(cache_key, &data, Some(dont_cache))
+            .await;
 
         Ok(data)
     }
@@ -189,7 +191,10 @@ mod tests {
     async fn test_scrape() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let scraper = SubsPleaseScraper::new(config.subsplease_scraper, db.redis.clone());
+        let scraper = SubsPleaseScraper::new(
+            config.subsplease_scraper,
+            db.redis.connection_manager.clone(),
+        );
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.0.is_empty());
     }
@@ -198,7 +203,10 @@ mod tests {
     async fn test_extract() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let mut scraper = SubsPleaseScraper::new(config.subsplease_scraper, db.redis.clone());
+        let mut scraper = SubsPleaseScraper::new(
+            config.subsplease_scraper,
+            db.redis.connection_manager.clone(),
+        );
         let options = ExtractOptions {
             dont_cache: Some(true),
         };
