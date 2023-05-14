@@ -1,5 +1,5 @@
 use crate::config::AniListAPIConfig;
-use crate::db::{Document, Redis, DB};
+use crate::db::{Document, Redis};
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
@@ -66,11 +66,8 @@ pub struct AniListAPI {
 }
 
 impl AniListAPI {
-    pub fn new(config: AniListAPIConfig, db: &DB) -> AniListAPI {
-        AniListAPI {
-            config,
-            redis: db.redis.clone(),
-        }
+    pub fn new(config: AniListAPIConfig, redis: Arc<Mutex<Redis>>) -> AniListAPI {
+        AniListAPI { config, redis }
     }
 
     fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
@@ -261,12 +258,14 @@ impl Source for AniListAPI {
 mod tests {
     use super::*;
     use crate::config::Config;
+    use crate::db::DB;
+    use crate::ExtractOptions;
 
     #[tokio::test]
     async fn test_fetch_user() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let api = AniListAPI::new(config.anilist_api, &db);
+        let api = AniListAPI::new(config.anilist_api, db.redis.clone());
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
     }
@@ -275,7 +274,7 @@ mod tests {
     async fn test_fetch_lists() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let api = AniListAPI::new(config.anilist_api, &db);
+        let api = AniListAPI::new(config.anilist_api, db.redis.clone());
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id, false).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -286,7 +285,7 @@ mod tests {
     async fn test_extract() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let mut api = AniListAPI::new(config.anilist_api, &db);
+        let mut api = AniListAPI::new(config.anilist_api, db.redis.clone());
         let options = ExtractOptions {
             dont_cache: Some(true),
         };

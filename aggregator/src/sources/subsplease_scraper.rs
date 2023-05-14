@@ -1,5 +1,5 @@
 use crate::config::SubsPleaseScraperConfig;
-use crate::db::{Redis, DB};
+use crate::db::Redis;
 use crate::sources::Source;
 use crate::CustomError;
 use crate::ExtractOptions;
@@ -55,11 +55,8 @@ pub struct SubsPleaseScraper {
 }
 
 impl SubsPleaseScraper {
-    pub fn new(config: SubsPleaseScraperConfig, db: &DB) -> SubsPleaseScraper {
-        SubsPleaseScraper {
-            config,
-            redis: db.redis.clone(),
-        }
+    pub fn new(config: SubsPleaseScraperConfig, redis: Arc<Mutex<Redis>>) -> SubsPleaseScraper {
+        SubsPleaseScraper { config, redis }
     }
 
     fn load_schedule_table(&self) -> Result<Html> {
@@ -166,14 +163,15 @@ impl Source for SubsPleaseScraper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::*;
+    use crate::config::Config;
+    use crate::db::DB;
     use crate::ExtractOptions;
 
     #[tokio::test]
     async fn test_scrape() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let scraper = SubsPleaseScraper::new(config.subsplease_scraper, &db);
+        let scraper = SubsPleaseScraper::new(config.subsplease_scraper, db.redis.clone());
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.0.is_empty());
     }
@@ -182,7 +180,7 @@ mod tests {
     async fn test_extract() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let mut scraper = SubsPleaseScraper::new(config.subsplease_scraper, &db);
+        let mut scraper = SubsPleaseScraper::new(config.subsplease_scraper, db.redis.clone());
         let options = ExtractOptions {
             dont_cache: Some(true),
         };
