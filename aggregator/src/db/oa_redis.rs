@@ -51,14 +51,19 @@ pub trait Cache {
         Ok(())
     }
 
-    // @todo Use atomic operations
     async fn set_ex_at<T>(&mut self, key: &str, value: &T, expire_at: usize) -> Result<()>
     where
         T: ToRedisArgs + Sync,
     {
+        let mut cmd = redis::Cmd::new();
+        let cmd = cmd
+            .arg("SET")
+            .arg(key)
+            .arg(value)
+            .arg("EXAT")
+            .arg(expire_at);
         let connection_manager = self.get_connection_manager();
-        connection_manager.set(key, value).await?;
-        connection_manager.expire_at(key, expire_at).await?;
+        connection_manager.send_packed_command(cmd).await?;
 
         Ok(())
     }
@@ -188,36 +193,116 @@ mod tests {
         }
     }
 
+    async fn del(key: &str) {
+        let config = Config::default();
+        let redis = Redis::new(config.db.redis).await;
+        let mut connection = redis.client.get_connection().unwrap();
+        redis::cmd("DEL")
+            .arg(key)
+            .query::<()>(&mut connection)
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn test_redis_cache() {
         let key = "test_redis_cache";
+        del(key).await;
+
         let config = Config::default();
         let redis = Redis::new(config.db.redis).await;
+
+        let expected = 420;
+        let expire = 10;
+        let expected_expire_higher = expire;
+        let expected_expire_lower = expected_expire_higher - 5;
+
         let mut cacher = Cacher {
             connection_manager: redis.connection_manager.clone(),
         };
-        let expected = 420;
-        cacher.cache_value_expire(key, &expected, 10, None).await;
-        let actual: i32 = cacher.get_cached(key, None).await.unwrap();
+        cacher
+            .cache_value_expire(key, &expected, expire, None)
+            .await;
+
+        let actual: usize = cacher.get_cached(key, None).await.unwrap();
         assert_eq!(actual, expected);
+
+        let actual_expire: usize = redis::cmd("TTL")
+            .arg(key)
+            .query(&mut redis.client.get_connection().unwrap())
+            .unwrap();
+        assert!(actual_expire >= expected_expire_lower && actual_expire <= expected_expire_higher);
     }
 
     #[tokio::test]
     async fn test_redis_cache_at() {
         let key = "test_redis_cache_at";
+        del(key).await;
+
         let config = Config::default();
         let redis = Redis::new(config.db.redis).await;
+
         let expected = 420;
         let expire_at =
             usize::try_from(time::OffsetDateTime::now_utc().unix_timestamp()).unwrap() + 10;
+        let expected_expire_higher = 10;
+        let expected_expire_lower = expected_expire_higher - 5;
+
         let mut cacher = Cacher {
             connection_manager: redis.connection_manager.clone(),
         };
-
         cacher
             .cache_value_expire_at(key, &expected, expire_at, None)
             .await;
-        let actual: i32 = cacher.get_cached(key, None).await.unwrap();
+
+        let actual: usize = cacher.get_cached(key, None).await.unwrap();
         assert_eq!(actual, expected);
+
+        let actual_expire: usize = redis::cmd("TTL")
+            .arg(key)
+            .query(&mut redis.client.get_connection().unwrap())
+            .unwrap();
+        assert!(actual_expire >= expected_expire_lower && actual_expire <= expected_expire_higher);
+    }
+
+    #[tokio::test]
+    async fn test_redis_cache_tomorrow() {
+        let key = "test_redis_cache_tomorrow";
+        del(key).await;
+
+        let config = Config::default();
+        let redis = Redis::new(config.db.redis).await;
+
+        let now = time::OffsetDateTime::now_utc();
+        let day = now.day();
+        let tomorrow = now
+            .replace_day(day + 1)
+            .unwrap()
+            .replace_time(Time::MIDNIGHT);
+
+        let expected = 420;
+        let expected_expire_higher = usize::try_from(tomorrow.unix_timestamp()).unwrap()
+            - usize::try_from(now.unix_timestamp()).unwrap();
+        let expected_expire_lower = expected_expire_higher - 5;
+
+        let mut cacher = Cacher {
+            connection_manager: redis.connection_manager.clone(),
+        };
+        cacher
+            .cache_value_expire_tomorrow(key, &expected, None)
+            .await;
+
+        let actual: usize = cacher.get_cached(key, None).await.unwrap();
+        println!("{} {}", actual, expected);
+        assert_eq!(actual, expected);
+
+        let actual_expire: usize = redis::cmd("TTL")
+            .arg(key)
+            .query(&mut redis.client.get_connection().unwrap())
+            .unwrap();
+        println!(
+            "{} {} {}",
+            expected_expire_lower, actual_expire, expected_expire_higher
+        );
+        assert!(actual_expire >= expected_expire_lower && actual_expire <= expected_expire_higher);
     }
 }
