@@ -179,30 +179,45 @@ mod tests {
     use super::*;
     use crate::config::Config;
 
-    // #[tokio::test]
-    // async fn test_redis_cache() {
-    //     let key = "test_redis_cache";
-    //     let config = Config::default();
-    //     let mut redis = Redis::new(config.db.redis).await;
-    //     let expected = 420;
-    //     redis.cache_value_expire(key, &expected, 10, None).await;
-    //     let actual: i32 = redis.get_cached(key, None).await.unwrap();
-    //     assert_eq!(actual, expected);
-    // }
+    struct Cacher {
+        connection_manager: redis::aio::ConnectionManager,
+    }
+    impl Cache for Cacher {
+        fn get_connection_manager(&mut self) -> &mut redis::aio::ConnectionManager {
+            &mut self.connection_manager
+        }
+    }
 
-    // #[tokio::test]
-    // async fn test_redis_cache_at() {
-    //     let key = "test_redis_cache_at";
-    //     let config = Config::default();
-    //     let mut redis = Redis::new(config.db.redis).await;
-    //     let expected = 420;
-    //     let expire_at =
-    //         usize::try_from(time::OffsetDateTime::now_utc().unix_timestamp()).unwrap() + 10;
+    #[tokio::test]
+    async fn test_redis_cache() {
+        let key = "test_redis_cache";
+        let config = Config::default();
+        let redis = Redis::new(config.db.redis).await;
+        let mut cacher = Cacher {
+            connection_manager: redis.connection_manager.clone(),
+        };
+        let expected = 420;
+        cacher.cache_value_expire(key, &expected, 10, None).await;
+        let actual: i32 = cacher.get_cached(key, None).await.unwrap();
+        assert_eq!(actual, expected);
+    }
 
-    //     redis
-    //         .cache_value_expire_at(key, &expected, expire_at, None)
-    //         .await;
-    //     let actual: i32 = redis.get_cached(key, None).await.unwrap();
-    //     assert_eq!(actual, expected);
-    // }
+    #[tokio::test]
+    async fn test_redis_cache_at() {
+        let key = "test_redis_cache_at";
+        let config = Config::default();
+        let redis = Redis::new(config.db.redis).await;
+        let expected = 420;
+        let expire_at =
+            usize::try_from(time::OffsetDateTime::now_utc().unix_timestamp()).unwrap() + 10;
+        let mut cacher = Cacher {
+            connection_manager: redis.connection_manager.clone(),
+        };
+
+        cacher
+            .cache_value_expire_at(key, &expected, expire_at, None)
+            .await;
+        let actual: i32 = cacher.get_cached(key, None).await.unwrap();
+        assert_eq!(actual, expected);
+    }
 }

@@ -100,38 +100,54 @@ mod tests {
     use super::*;
     use serde::{Deserialize, Serialize};
 
-    // #[derive(Hash, PartialEq, Serialize, Deserialize)]
-    // struct Test {
-    //     test: String,
-    // }
+    #[derive(Hash, PartialEq, Serialize, Deserialize)]
+    struct Test {
+        test: String,
+    }
+    impl Document for Test {}
 
-    // impl Document for Test {}
+    struct Persister {
+        client: mongodb::Client,
+    }
+    impl Persist for Persister {
+        fn get_client(&self) -> &mongodb::Client {
+            &self.client
+        }
 
-    // #[tokio::test]
-    // async fn test_mongodb_upsert_documents() {
-    //     let mongo = MongoDB::default();
-    //     let collection = mongo
-    //         .client
-    //         .database(&mongo.config.database)
-    //         .collection::<Test>("test");
-    //     collection.drop(None).await.unwrap();
+        fn get_database(&self) -> String {
+            "test".to_owned()
+        }
+    }
 
-    //     mongo
-    //         .upsert_documents(
-    //             "test",
-    //             "test",
-    //             &vec![Test {
-    //                 test: "test".to_owned(),
-    //             }],
-    //         )
-    //         .await
-    //         .unwrap();
+    #[tokio::test]
+    async fn test_mongodb_upsert_documents() {
+        let mongo = MongoDB::default();
+        let collection = mongo
+            .client
+            .database(&mongo.config.database)
+            .collection::<Test>("test");
+        collection.drop(None).await.unwrap();
 
-    //     let count = collection
-    //         .count_documents(doc! { "test": "test" }, None)
-    //         .await
-    //         .unwrap();
+        let persister = Persister {
+            client: mongo.client.clone(),
+        };
 
-    //     assert_eq!(count, 1);
-    // }
+        persister
+            .upsert_documents(
+                "test",
+                "test",
+                &vec![Test {
+                    test: "test".to_owned(),
+                }],
+            )
+            .await
+            .unwrap();
+
+        let count = collection
+            .count_documents(doc! { "test": "test" }, None)
+            .await
+            .unwrap();
+
+        assert_eq!(count, 1);
+    }
 }
