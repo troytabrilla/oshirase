@@ -35,7 +35,7 @@ pub struct DBConfig {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EmitterConfig {
+pub struct TransformerConfig {
     pub similarity_threshold: f64,
 }
 
@@ -51,7 +51,7 @@ pub struct Config {
     pub aggregator: AggregatorConfig,
     pub anilist_api: AniListAPIConfig,
     pub db: DBConfig,
-    pub emitter: EmitterConfig,
+    pub transformer: TransformerConfig,
     pub subsplease_scraper: SubsPleaseScraperConfig,
 }
 

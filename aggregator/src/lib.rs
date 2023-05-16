@@ -1,15 +1,15 @@
 mod config;
 mod db;
-mod emitter;
 mod sources;
+mod transformer;
 
 pub use config::Config;
 
 use anilist_api::*;
 use db::*;
-use emitter::*;
 use sources::*;
 use subsplease_scraper::*;
+use transformer::*;
 
 use crossbeam_channel::bounded;
 use serde::{Deserialize, Serialize};
@@ -97,8 +97,8 @@ impl<'a> Aggregator<'a> {
     }
 
     fn transform(&mut self, mut data: Data) -> Result<Data> {
-        let emitter = Emitter::new(&self.config.emitter);
-        let (snd, rcv) = bounded::<Emitted>(16);
+        let transformer = Transformer::new(&self.config.transformer);
+        let (snd, rcv) = bounded::<Transformed>(16);
 
         let media_lite: Vec<MediaLite> = data
             .lists
@@ -114,8 +114,10 @@ impl<'a> Aggregator<'a> {
         let handle = crossbeam::scope(|s| {
             // Future sources should spawn new threads to emit data to combine to main lists
             s.spawn(|_| {
-                if let Err(err) = emitter.emit(&media_lite, &data.schedule.0, "schedule", snd) {
-                    eprintln!("Error occurred in emitter thread: {}.", err);
+                if let Err(err) =
+                    transformer.transform(&media_lite, &data.schedule.0, "schedule", snd)
+                {
+                    eprintln!("Error occurred in transformer thread: {}.", err);
                 }
             });
 

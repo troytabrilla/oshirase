@@ -1,10 +1,10 @@
-use crate::config::EmitterConfig;
+use crate::config::TransformerConfig;
 use crate::Result;
 
 use serde::Serialize;
 
-pub struct Emitter<'a> {
-    config: &'a EmitterConfig,
+pub struct Transformer<'a> {
+    config: &'a TransformerConfig,
 }
 
 pub struct MediaLite {
@@ -18,23 +18,23 @@ pub trait Extra {
 }
 
 #[derive(Debug)]
-pub struct Emitted {
+pub struct Transformed {
     pub index: usize,
     pub key: String,
     pub json: String,
 }
 
-impl Emitter<'_> {
-    pub fn new(config: &EmitterConfig) -> Emitter {
-        Emitter { config }
+impl Transformer<'_> {
+    pub fn new(config: &TransformerConfig) -> Transformer {
+        Transformer { config }
     }
 
-    pub fn emit<T>(
+    pub fn transform<T>(
         &self,
         media: &[MediaLite],
         extra: &[T],
         key: &str,
-        snd: crossbeam_channel::Sender<Emitted>,
+        snd: crossbeam_channel::Sender<Transformed>,
     ) -> Result<()>
     where
         T: Extra + Serialize + Send + Sync + std::fmt::Debug,
@@ -46,8 +46,8 @@ impl Emitter<'_> {
 
                 let mut score_tuple: (f64, Option<&T>) = (-f64::INFINITY, None);
                 for ex in extra {
-                    let score = strsim::normalized_levenshtein(title, &ex.get_title());
-                    let alt_score = strsim::normalized_levenshtein(alt_title, &ex.get_title());
+                    let score = strsim::normalized_levenshtein(title, ex.get_title());
+                    let alt_score = strsim::normalized_levenshtein(alt_title, ex.get_title());
                     if score > self.config.similarity_threshold && score > score_tuple.0 {
                         score_tuple = (score, Some(ex));
                     }
@@ -57,7 +57,7 @@ impl Emitter<'_> {
                 }
 
                 if score_tuple.1.is_some() {
-                    snd.send(Emitted {
+                    snd.send(Transformed {
                         index,
                         key: key.to_owned(),
                         json: serde_json::to_string(score_tuple.1.unwrap())?,
@@ -105,8 +105,10 @@ mod tests {
         let (snd, rcv) = bounded(4);
 
         let config = Config::default();
-        let emitter = Emitter::new(&config.emitter);
-        emitter.emit(&media, &schedules, "schedule", snd).unwrap();
+        let transformer = Transformer::new(&config.transformer);
+        transformer
+            .transform(&media, &schedules, "schedule", snd)
+            .unwrap();
 
         let mut msgs = Vec::new();
         for msg in rcv.iter() {

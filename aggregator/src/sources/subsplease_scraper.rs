@@ -1,6 +1,6 @@
 use crate::config::SubsPleaseScraperConfig;
 use crate::db::Cache;
-use crate::emitter::Extra;
+use crate::transformer::Extra;
 use crate::sources::Source;
 use crate::CustomError;
 use crate::ExtractOptions;
