@@ -150,10 +150,7 @@ impl Aggregator {
 
     pub async fn run(&mut self, options: Option<RunOptions>) -> Result<Data> {
         let sources = Sources {
-            anilist_api: AniListAPI::new(
-                self.config.anilist_api.clone(),
-                self.db.redis.connection_manager.clone(),
-            ),
+            anilist_api: AniListAPI::new(self.config.anilist_api.clone()),
             subsplease_scraper: SubsPleaseScraper::new(
                 self.config.subsplease_scraper.clone(),
                 self.db.redis.connection_manager.clone(),

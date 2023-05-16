@@ -1,5 +1,5 @@
 use crate::config::AniListAPIConfig;
-use crate::db::{Cache, Document};
+use crate::db::Document;
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::CustomError;
@@ -60,12 +60,11 @@ struct AniListListQuery;
 
 pub struct AniListAPI {
     config: AniListAPIConfig,
-    redis: redis::aio::ConnectionManager,
 }
 
 impl AniListAPI {
-    pub fn new(config: AniListAPIConfig, redis: redis::aio::ConnectionManager) -> AniListAPI {
-        AniListAPI { config, redis }
+    pub fn new(config: AniListAPIConfig) -> AniListAPI {
+        AniListAPI { config }
     }
 
     fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
@@ -175,20 +174,17 @@ impl AniListAPI {
         }
     }
 
-    pub async fn fetch_lists(&self, user_id: u64, skip_full: bool) -> Result<MediaLists> {
+    pub async fn fetch_lists(&self, user_id: u64) -> Result<MediaLists> {
         let variables = ani_list_list_query::Variables {
             user_id: Some(user_id as i64),
-            status_in: match skip_full {
-                true => Some(vec![Some(ani_list_list_query::MediaListStatus::CURRENT)]),
-                false => Some(vec![
-                    Some(ani_list_list_query::MediaListStatus::CURRENT),
-                    Some(ani_list_list_query::MediaListStatus::PLANNING),
-                    Some(ani_list_list_query::MediaListStatus::COMPLETED),
-                    Some(ani_list_list_query::MediaListStatus::DROPPED),
-                    Some(ani_list_list_query::MediaListStatus::PAUSED),
-                    Some(ani_list_list_query::MediaListStatus::REPEATING),
-                ]),
-            },
+            status_in: Some(vec![
+                Some(ani_list_list_query::MediaListStatus::CURRENT),
+                Some(ani_list_list_query::MediaListStatus::PLANNING),
+                Some(ani_list_list_query::MediaListStatus::COMPLETED),
+                Some(ani_list_list_query::MediaListStatus::DROPPED),
+                Some(ani_list_list_query::MediaListStatus::PAUSED),
+                Some(ani_list_list_query::MediaListStatus::REPEATING),
+            ]),
         };
         let body = AniListListQuery::build_query(variables);
 
@@ -216,37 +212,12 @@ impl AniListAPI {
 }
 
 #[async_trait]
-impl Cache for AniListAPI {
-    fn get_connection_manager(&mut self) -> &mut redis::aio::ConnectionManager {
-        &mut self.redis
-    }
-}
-
-#[async_trait]
 impl Source for AniListAPI {
     type Data = MediaLists;
 
-    async fn extract(&mut self, options: Option<ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&mut self, _options: Option<ExtractOptions>) -> Result<Self::Data> {
         let user = self.fetch_user().await?;
-
-        let cache_key = self
-            .get_cache_key("anilist_api:skip_full", Some(&user))
-            .await?;
-
-        let skip_cache = match options {
-            Some(options) => options.skip_cache.unwrap_or(false),
-            None => false,
-        };
-
-        let skip_full = self
-            .get_cached::<bool>(&cache_key, Some(skip_cache))
-            .await
-            .is_some();
-
-        let data = self.fetch_lists(user.id, skip_full).await?;
-
-        self.cache_value_expire_tomorrow::<bool>(&cache_key, &true)
-            .await;
+        let data = self.fetch_lists(user.id).await?;
 
         Ok(data)
     }
@@ -256,14 +227,12 @@ impl Source for AniListAPI {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::db::DB;
     use crate::ExtractOptions;
 
     #[tokio::test]
     async fn test_fetch_user() {
         let config = Config::default();
-        let db = DB::new(&config.db).await;
-        let api = AniListAPI::new(config.anilist_api, db.redis.connection_manager.clone());
+        let api = AniListAPI::new(config.anilist_api);
         let actual = api.fetch_user().await.unwrap();
         assert!(!actual.name.is_empty());
     }
@@ -271,10 +240,9 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_lists() {
         let config = Config::default();
-        let db = DB::new(&config.db).await;
-        let api = AniListAPI::new(config.anilist_api, db.redis.connection_manager.clone());
+        let api = AniListAPI::new(config.anilist_api);
         let user = api.fetch_user().await.unwrap();
-        let actual = api.fetch_lists(user.id, false).await.unwrap();
+        let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }
@@ -282,8 +250,7 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let db = DB::new(&config.db).await;
-        let mut api = AniListAPI::new(config.anilist_api, db.redis.connection_manager.clone());
+        let mut api = AniListAPI::new(config.anilist_api);
         let options = ExtractOptions {
             skip_cache: Some(true),
         };
