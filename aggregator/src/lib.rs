@@ -47,12 +47,12 @@ impl Error for CustomError {}
 
 #[derive(Clone)]
 pub struct ExtractOptions {
-    pub dont_cache: Option<bool>,
+    pub skip_cache: Option<bool>,
 }
 
 pub struct RunOptions {
     pub extract_options: Option<ExtractOptions>,
-    pub dont_cache: Option<bool>,
+    pub skip_cache: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -160,8 +160,8 @@ impl Aggregator {
             ),
         };
 
-        let (dont_cache, extract_options) = match options {
-            Some(options) => (options.dont_cache.unwrap_or(false), options.extract_options),
+        let (skip_cache, extract_options) = match options {
+            Some(options) => (options.skip_cache.unwrap_or(false), options.extract_options),
             None => (false, None),
         };
 
@@ -170,7 +170,7 @@ impl Aggregator {
             .get_cache_key("aggregator:run", None)
             .await?;
 
-        if let Some(cached) = self.get_cached::<Data>(&cache_key, Some(dont_cache)).await {
+        if let Some(cached) = self.get_cached::<Data>(&cache_key, Some(skip_cache)).await {
             println!("Got cached value for cache key: {}.", cache_key);
             return Ok(cached);
         }
@@ -179,13 +179,8 @@ impl Aggregator {
         let data = self.transform(data)?;
         self.load(&data).await?;
 
-        self.cache_value_expire(
-            &cache_key,
-            &data,
-            self.config.aggregator.ttl,
-            Some(dont_cache),
-        )
-        .await;
+        self.cache_value_expire(&cache_key, &data, self.config.aggregator.ttl)
+            .await;
 
         Ok(data)
     }
@@ -235,9 +230,9 @@ mod tests {
         let mut aggregator = Aggregator::new(config).await;
         let options = RunOptions {
             extract_options: Some(ExtractOptions {
-                dont_cache: Some(true),
+                skip_cache: Some(true),
             }),
-            dont_cache: Some(true),
+            skip_cache: Some(true),
         };
         aggregator.run(Some(options)).await.unwrap();
 

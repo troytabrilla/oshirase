@@ -11,8 +11,8 @@ struct Cli {
     #[arg(short, long, help = "Path to config.toml")]
     config: Option<String>,
 
-    #[arg(short, long, help = "Disable caching")]
-    dont_cache: bool,
+    #[arg(short, long, help = "Skip cache check")]
+    skip_cache: bool,
 
     #[arg(short, long, help = "Print results")]
     print: bool,
@@ -28,9 +28,9 @@ async fn main() -> Result<()> {
     };
 
     let options = RunOptions {
-        dont_cache: Some(cli.dont_cache),
+        skip_cache: Some(cli.skip_cache),
         extract_options: Some(ExtractOptions {
-            dont_cache: Some(cli.dont_cache),
+            skip_cache: Some(cli.skip_cache),
         }),
     };
 

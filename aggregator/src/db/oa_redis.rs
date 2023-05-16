@@ -68,12 +68,12 @@ pub trait Cache {
         Ok(())
     }
 
-    async fn get_cached<T>(&mut self, key: &str, dont_cache: Option<bool>) -> Option<T>
+    async fn get_cached<T>(&mut self, key: &str, skip_cache: Option<bool>) -> Option<T>
     where
         T: DeserializeOwned,
     {
-        if let Some(dont_cache) = dont_cache {
-            if dont_cache {
+        if let Some(skip_cache) = skip_cache {
+            if skip_cache {
                 return None;
             }
         }
@@ -93,21 +93,10 @@ pub trait Cache {
         }
     }
 
-    async fn cache_value_expire<T>(
-        &mut self,
-        key: &str,
-        value: &T,
-        seconds: usize,
-        dont_cache: Option<bool>,
-    ) where
+    async fn cache_value_expire<T>(&mut self, key: &str, value: &T, seconds: usize)
+    where
         T: Serialize + Sync,
     {
-        if let Some(dont_cache) = dont_cache {
-            if dont_cache {
-                return;
-            }
-        }
-
         let serialized = match serde_json::to_string(value) {
             Ok(serialized) => serialized,
             Err(err) => {
@@ -121,21 +110,10 @@ pub trait Cache {
         }
     }
 
-    async fn cache_value_expire_at<T>(
-        &mut self,
-        key: &str,
-        value: &T,
-        expire_at: usize,
-        dont_cache: Option<bool>,
-    ) where
+    async fn cache_value_expire_at<T>(&mut self, key: &str, value: &T, expire_at: usize)
+    where
         T: Serialize + Sync,
     {
-        if let Some(dont_cache) = dont_cache {
-            if dont_cache {
-                return;
-            }
-        }
-
         let serialized = match serde_json::to_string(value) {
             Ok(serialized) => serialized,
             Err(err) => {
@@ -149,12 +127,8 @@ pub trait Cache {
         }
     }
 
-    async fn cache_value_expire_tomorrow<T>(
-        &mut self,
-        key: &str,
-        value: &T,
-        dont_cache: Option<bool>,
-    ) where
+    async fn cache_value_expire_tomorrow<T>(&mut self, key: &str, value: &T)
+    where
         T: Serialize + Sync,
     {
         let expire_at = match OffsetDateTime::now_utc().checked_add(Duration::DAY) {
@@ -174,8 +148,7 @@ pub trait Cache {
             None => TTL_FALLBACK,
         };
 
-        self.cache_value_expire_at(key, value, expire_at, dont_cache)
-            .await
+        self.cache_value_expire_at(key, value, expire_at).await
     }
 }
 
@@ -219,9 +192,7 @@ mod tests {
         let mut cacher = Cacher {
             connection_manager: redis.connection_manager.clone(),
         };
-        cacher
-            .cache_value_expire(key, &expected, expire, None)
-            .await;
+        cacher.cache_value_expire(key, &expected, expire).await;
 
         let actual: usize = cacher.get_cached(key, None).await.unwrap();
         assert_eq!(actual, expected);
@@ -251,7 +222,7 @@ mod tests {
             connection_manager: redis.connection_manager.clone(),
         };
         cacher
-            .cache_value_expire_at(key, &expected, expire_at, None)
+            .cache_value_expire_at(key, &expected, expire_at)
             .await;
 
         let actual: usize = cacher.get_cached(key, None).await.unwrap();
@@ -287,9 +258,7 @@ mod tests {
         let mut cacher = Cacher {
             connection_manager: redis.connection_manager.clone(),
         };
-        cacher
-            .cache_value_expire_tomorrow(key, &expected, None)
-            .await;
+        cacher.cache_value_expire_tomorrow(key, &expected).await;
 
         let actual: usize = cacher.get_cached(key, None).await.unwrap();
         assert_eq!(actual, expected);

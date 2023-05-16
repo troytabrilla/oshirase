@@ -161,20 +161,19 @@ impl Source for SubsPleaseScraper {
     async fn extract(&mut self, options: Option<ExtractOptions>) -> Result<Self::Data> {
         let cache_key = "subsplease_scraper:extract";
 
-        let dont_cache = match options {
-            Some(options) => options.dont_cache.unwrap_or(false),
+        let skip_cache = match options {
+            Some(options) => options.skip_cache.unwrap_or(false),
             None => false,
         };
 
-        if let Some(cached) = self.get_cached(cache_key, Some(dont_cache)).await {
+        if let Some(cached) = self.get_cached(cache_key, Some(skip_cache)).await {
             println!("Got cached value for cache key: {}.", cache_key);
             return Ok(cached);
         }
 
         let data = self.scrape().await?;
 
-        self.cache_value_expire_tomorrow(cache_key, &data, Some(dont_cache))
-            .await;
+        self.cache_value_expire_tomorrow(cache_key, &data).await;
 
         Ok(data)
     }
@@ -208,7 +207,7 @@ mod tests {
             db.redis.connection_manager.clone(),
         );
         let options = ExtractOptions {
-            dont_cache: Some(true),
+            skip_cache: Some(true),
         };
         let actual = scraper.extract(Some(options)).await.unwrap();
         assert!(!actual.0.is_empty());

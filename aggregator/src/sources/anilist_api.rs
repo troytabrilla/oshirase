@@ -233,19 +233,19 @@ impl Source for AniListAPI {
             .get_cache_key("anilist_api:skip_full", Some(&user))
             .await?;
 
-        let dont_cache = match options {
-            Some(options) => options.dont_cache.unwrap_or(false),
+        let skip_cache = match options {
+            Some(options) => options.skip_cache.unwrap_or(false),
             None => false,
         };
 
         let skip_full = self
-            .get_cached::<bool>(&cache_key, Some(dont_cache))
+            .get_cached::<bool>(&cache_key, Some(skip_cache))
             .await
             .is_some();
 
         let data = self.fetch_lists(user.id, skip_full).await?;
 
-        self.cache_value_expire_tomorrow::<bool>(&cache_key, &true, Some(dont_cache))
+        self.cache_value_expire_tomorrow::<bool>(&cache_key, &true)
             .await;
 
         Ok(data)
@@ -285,7 +285,7 @@ mod tests {
         let db = DB::new(&config.db).await;
         let mut api = AniListAPI::new(config.anilist_api, db.redis.connection_manager.clone());
         let options = ExtractOptions {
-            dont_cache: Some(true),
+            skip_cache: Some(true),
         };
         let actual = api.extract(Some(options)).await.unwrap();
         assert!(!actual.anime.is_empty());
