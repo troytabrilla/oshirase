@@ -1,10 +1,10 @@
-use crate::config::{Config, EmitterConfig};
+use crate::config::EmitterConfig;
 use crate::Result;
 
 use serde::Serialize;
 
-pub struct Emitter {
-    config: EmitterConfig,
+pub struct Emitter<'a> {
+    config: &'a EmitterConfig,
 }
 
 pub struct MediaLite {
@@ -14,7 +14,7 @@ pub struct MediaLite {
 }
 
 pub trait Extra {
-    fn get_title(&self) -> String;
+    fn get_title(&self) -> &String;
 }
 
 #[derive(Debug)]
@@ -24,8 +24,8 @@ pub struct Emitted {
     pub json: String,
 }
 
-impl Emitter {
-    pub fn new(config: EmitterConfig) -> Emitter {
+impl Emitter<'_> {
+    pub fn new(config: &EmitterConfig) -> Emitter {
         Emitter { config }
     }
 
@@ -37,7 +37,7 @@ impl Emitter {
         snd: crossbeam_channel::Sender<Emitted>,
     ) -> Result<()>
     where
-        T: Extra + Serialize + Clone + Send + Sync + std::fmt::Debug,
+        T: Extra + Serialize + Send + Sync + std::fmt::Debug,
     {
         for (index, entry) in media.iter().enumerate() {
             if entry.status == "CURRENT" {
@@ -70,18 +70,11 @@ impl Emitter {
     }
 }
 
-impl Default for Emitter {
-    fn default() -> Self {
-        let config = Config::default();
-
-        Emitter::new(config.emitter)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::sources::subsplease_scraper::{AnimeScheduleEntry, Day};
+    use crate::Config;
     use crossbeam_channel::bounded;
 
     #[test]
@@ -111,7 +104,8 @@ mod tests {
 
         let (snd, rcv) = bounded(4);
 
-        let emitter = Emitter::default();
+        let config = Config::default();
+        let emitter = Emitter::new(&config.emitter);
         emitter.emit(&media, &schedules, "schedule", snd).unwrap();
 
         let mut msgs = Vec::new();

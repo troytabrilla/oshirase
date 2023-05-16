@@ -45,7 +45,6 @@ impl Display for CustomError {
 
 impl Error for CustomError {}
 
-#[derive(Clone)]
 pub struct ExtractOptions {
     pub skip_cache: Option<bool>,
 }
@@ -61,34 +60,34 @@ pub struct Data {
     schedule: AnimeSchedule,
 }
 
-pub struct Sources {
-    anilist_api: AniListAPI,
-    subsplease_scraper: SubsPleaseScraper,
+pub struct Sources<'a> {
+    anilist_api: AniListAPI<'a>,
+    subsplease_scraper: SubsPleaseScraper<'a>,
 }
 
-pub struct Aggregator {
-    config: Config,
-    db: DB,
+pub struct Aggregator<'a> {
+    config: &'a Config,
+    db: DB<'a>,
 }
 
-// @todo Reassess usage of `clone` across the project, try to avoid unnecessary cloning
 // @todo Consider better efficiency for ETL; avoid unnecessary work and copies. Look into streams?
 // @todo Need to load dependency sources before main list source, then dependencies can be merged into main list in parallel
-impl Aggregator {
-    pub async fn new(config: Config) -> Aggregator {
-        let db = DB::new(&config.db).await;
-
-        Aggregator { config, db }
+impl<'a> Aggregator<'a> {
+    pub async fn new(config: &'a Config) -> Aggregator<'a> {
+        Aggregator {
+            config,
+            db: DB::new(&config.db).await,
+        }
     }
 
     async fn extract(
         &mut self,
-        mut sources: Sources,
-        options: Option<ExtractOptions>,
+        mut sources: Sources<'a>,
+        options: Option<&ExtractOptions>,
     ) -> Result<Data> {
         let (lists, schedule) = tokio::join!(
-            sources.anilist_api.extract(options.clone()),
-            sources.subsplease_scraper.extract(options.clone())
+            sources.anilist_api.extract(options),
+            sources.subsplease_scraper.extract(options)
         );
 
         let lists = lists?;
@@ -98,7 +97,7 @@ impl Aggregator {
     }
 
     fn transform(&mut self, mut data: Data) -> Result<Data> {
-        let emitter = Emitter::new(self.config.emitter.clone());
+        let emitter = Emitter::new(&self.config.emitter);
         let (snd, rcv) = bounded::<Emitted>(16);
 
         let media_lite: Vec<MediaLite> = data
@@ -151,17 +150,20 @@ impl Aggregator {
         Ok(())
     }
 
-    pub async fn run(&mut self, options: Option<RunOptions>) -> Result<Data> {
+    pub async fn run(&mut self, options: Option<&RunOptions>) -> Result<Data> {
         let sources = Sources {
-            anilist_api: AniListAPI::new(self.config.anilist_api.clone()),
+            anilist_api: AniListAPI::new(&self.config.anilist_api),
             subsplease_scraper: SubsPleaseScraper::new(
-                self.config.subsplease_scraper.clone(),
+                &self.config.subsplease_scraper,
                 self.db.redis.connection_manager.clone(),
             ),
         };
 
         let (skip_cache, extract_options) = match options {
-            Some(options) => (options.skip_cache.unwrap_or(false), options.extract_options),
+            Some(options) => (
+                options.skip_cache.unwrap_or(false),
+                options.extract_options.as_ref(),
+            ),
             None => (false, None),
         };
 
@@ -186,17 +188,17 @@ impl Aggregator {
     }
 }
 
-impl Persist for Aggregator {
+impl Persist for Aggregator<'_> {
     fn get_client(&self) -> &mongodb::Client {
         &self.db.mongodb.client
     }
 
-    fn get_database(&self) -> String {
-        self.config.db.mongodb.database.to_owned()
+    fn get_database(&self) -> &str {
+        self.config.db.mongodb.database.as_str()
     }
 }
 
-impl Cache for Aggregator {
+impl Cache for Aggregator<'_> {
     fn get_connection_manager(&mut self) -> &mut redis::aio::ConnectionManager {
         &mut self.db.redis.connection_manager
     }
@@ -210,7 +212,7 @@ mod tests {
     #[tokio::test]
     async fn test_run() {
         let config = Config::default();
-        let mongodb = MongoDB::new(config.db.mongodb.clone());
+        let mongodb = MongoDB::new(&config.db.mongodb);
         let database = mongodb.client.database("test");
         database
             .collection::<Media>("anime")
@@ -223,18 +225,18 @@ mod tests {
             .await
             .unwrap();
 
-        let redis_client = Redis::new(config.db.redis.clone()).await.client;
+        let redis_client = Redis::new(&config.db.redis).await.client;
         let mut connection = redis_client.get_connection().unwrap();
         redis::cmd("FLUSHALL").query::<()>(&mut connection).unwrap();
 
-        let mut aggregator = Aggregator::new(config).await;
+        let mut aggregator = Aggregator::new(&config).await;
         let options = RunOptions {
             extract_options: Some(ExtractOptions {
                 skip_cache: Some(true),
             }),
             skip_cache: Some(true),
         };
-        aggregator.run(Some(options)).await.unwrap();
+        aggregator.run(Some(&options)).await.unwrap();
 
         let anime: bson::Document = mongodb
             .client

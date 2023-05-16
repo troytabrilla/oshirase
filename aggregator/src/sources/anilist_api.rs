@@ -12,13 +12,11 @@ use serde::{Deserialize, Serialize};
 
 type Json = serde_json::Value;
 
-#[derive(Clone, PartialEq)]
 pub struct User {
     id: u64,
-    name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Hash)]
 pub struct Media {
     pub media_id: Option<u64>,
     pub media_type: Option<String>,
@@ -58,12 +56,12 @@ struct AniListUserQuery;
 )]
 struct AniListListQuery;
 
-pub struct AniListAPI {
-    config: AniListAPIConfig,
+pub struct AniListAPI<'a> {
+    config: &'a AniListAPIConfig,
 }
 
-impl AniListAPI {
-    pub fn new(config: AniListAPIConfig) -> AniListAPI {
+impl AniListAPI<'_> {
+    pub fn new(config: &AniListAPIConfig) -> AniListAPI {
         AniListAPI { config }
     }
 
@@ -115,10 +113,6 @@ impl AniListAPI {
             id: match Self::extract_value_as_u64(&json, "/data/Viewer/id") {
                 Some(id) => id,
                 None => return Err(CustomError::boxed("Could not find user ID.")),
-            },
-            name: match Self::extract_value_as_string(&json, "/data/Viewer/name") {
-                Some(name) => name,
-                None => return Err(CustomError::boxed("Could not find user name.")),
             },
         })
     }
@@ -212,10 +206,10 @@ impl AniListAPI {
 }
 
 #[async_trait]
-impl Source for AniListAPI {
+impl Source<'_> for AniListAPI<'_> {
     type Data = MediaLists;
 
-    async fn extract(&mut self, _options: Option<ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&mut self, _options: Option<&ExtractOptions>) -> Result<Self::Data> {
         let user = self.fetch_user().await?;
         let data = self.fetch_lists(user.id).await?;
 
@@ -232,15 +226,15 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_user() {
         let config = Config::default();
-        let api = AniListAPI::new(config.anilist_api);
+        let api = AniListAPI::new(&config.anilist_api);
         let actual = api.fetch_user().await.unwrap();
-        assert!(!actual.name.is_empty());
+        assert_ne!(actual.id, 0);
     }
 
     #[tokio::test]
     async fn test_fetch_lists() {
         let config = Config::default();
-        let api = AniListAPI::new(config.anilist_api);
+        let api = AniListAPI::new(&config.anilist_api);
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -250,11 +244,11 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let mut api = AniListAPI::new(config.anilist_api);
+        let mut api = AniListAPI::new(&config.anilist_api);
         let options = ExtractOptions {
             skip_cache: Some(true),
         };
-        let actual = api.extract(Some(options)).await.unwrap();
+        let actual = api.extract(Some(&options)).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

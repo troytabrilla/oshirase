@@ -8,14 +8,14 @@ use time::{Duration, OffsetDateTime, Time};
 
 const TTL_FALLBACK: usize = 86400;
 
-pub struct Redis {
+pub struct Redis<'a> {
     pub client: Client,
     pub connection_manager: ConnectionManager,
-    pub config: RedisConfig,
+    pub config: &'a RedisConfig,
 }
 
-impl Redis {
-    pub async fn new(config: RedisConfig) -> Redis {
+impl Redis<'_> {
+    pub async fn new(config: &RedisConfig) -> Redis {
         let client = Client::open(config.host.as_str()).unwrap();
         let connection_manager = client.get_tokio_connection_manager().await.unwrap();
 
@@ -168,7 +168,7 @@ mod tests {
 
     async fn del(key: &str) {
         let config = Config::default();
-        let redis = Redis::new(config.db.redis).await;
+        let redis = Redis::new(&config.db.redis).await;
         let mut connection = redis.client.get_connection().unwrap();
         redis::cmd("DEL")
             .arg(key)
@@ -182,7 +182,7 @@ mod tests {
         del(key).await;
 
         let config = Config::default();
-        let redis = Redis::new(config.db.redis).await;
+        let redis = Redis::new(&config.db.redis).await;
 
         let expected = 420;
         let expire = 10;
@@ -190,7 +190,7 @@ mod tests {
         let expected_expire_lower = expected_expire_higher - 5;
 
         let mut cacher = Cacher {
-            connection_manager: redis.connection_manager.clone(),
+            connection_manager: redis.connection_manager,
         };
         cacher.cache_value_expire(key, &expected, expire).await;
 
@@ -210,7 +210,7 @@ mod tests {
         del(key).await;
 
         let config = Config::default();
-        let redis = Redis::new(config.db.redis).await;
+        let redis = Redis::new(&config.db.redis).await;
 
         let expected = 420;
         let expire_at =
@@ -219,7 +219,7 @@ mod tests {
         let expected_expire_lower = expected_expire_higher - 5;
 
         let mut cacher = Cacher {
-            connection_manager: redis.connection_manager.clone(),
+            connection_manager: redis.connection_manager,
         };
         cacher
             .cache_value_expire_at(key, &expected, expire_at)
@@ -241,7 +241,7 @@ mod tests {
         del(key).await;
 
         let config = Config::default();
-        let redis = Redis::new(config.db.redis).await;
+        let redis = Redis::new(&config.db.redis).await;
 
         let now = time::OffsetDateTime::now_utc();
         let day = now.day();
@@ -256,7 +256,7 @@ mod tests {
         let expected_expire_lower = expected_expire_higher - 5;
 
         let mut cacher = Cacher {
-            connection_manager: redis.connection_manager.clone(),
+            connection_manager: redis.connection_manager,
         };
         cacher.cache_value_expire_tomorrow(key, &expected).await;
 

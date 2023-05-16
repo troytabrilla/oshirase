@@ -13,16 +13,16 @@ use std::hash::Hash;
 
 pub trait Document: DeserializeOwned + Serialize + Hash + Unpin + Send + Sync {}
 
-pub struct DB {
-    pub mongodb: MongoDB,
-    pub redis: Redis,
+pub struct DB<'a> {
+    pub mongodb: MongoDB<'a>,
+    pub redis: Redis<'a>,
 }
 
-impl DB {
-    pub async fn new(config: &DBConfig) -> DB {
+impl<'a> DB<'_> {
+    pub async fn new(config: &'a DBConfig) -> DB {
         DB {
-            mongodb: MongoDB::new(config.mongodb.clone()),
-            redis: Redis::new(config.redis.clone()).await,
+            mongodb: MongoDB::new(&config.mongodb),
+            redis: Redis::new(&config.redis).await,
         }
     }
 }

@@ -1,4 +1,4 @@
-use crate::config::{Config, MongoDBConfig};
+use crate::config::MongoDBConfig;
 use crate::db::Document;
 use crate::CustomError;
 use crate::Result;
@@ -12,13 +12,13 @@ use mongodb::{
 };
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
-pub struct MongoDB {
+pub struct MongoDB<'a> {
     pub client: mongodb::Client,
-    pub config: MongoDBConfig,
+    pub config: &'a MongoDBConfig,
 }
 
-impl MongoDB {
-    pub fn new(config: MongoDBConfig) -> MongoDB {
+impl MongoDB<'_> {
+    pub fn new(config: &MongoDBConfig) -> MongoDB {
         let address = ServerAddress::parse(&config.host).unwrap();
         let hosts = vec![address];
         let options = ClientOptions::builder()
@@ -31,19 +31,11 @@ impl MongoDB {
     }
 }
 
-impl Default for MongoDB {
-    fn default() -> MongoDB {
-        let config = Config::default();
-
-        Self::new(config.db.mongodb)
-    }
-}
-
 #[async_trait]
 pub trait Persist {
     fn get_client(&self) -> &mongodb::Client;
 
-    fn get_database(&self) -> String;
+    fn get_database(&self) -> &str;
 
     fn hash_document<T>(document: &T) -> String
     where
@@ -64,7 +56,7 @@ pub trait Persist {
     where
         T: Document,
     {
-        let database = self.get_client().database(&self.get_database());
+        let database = self.get_client().database(self.get_database());
         let collection = database.collection::<T>(collection);
 
         let index_options = IndexOptions::builder().unique(true).build();
@@ -107,6 +99,7 @@ pub trait Persist {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Config;
     use futures::TryStreamExt;
     use serde::{Deserialize, Serialize};
 
@@ -125,14 +118,15 @@ mod tests {
             &self.client
         }
 
-        fn get_database(&self) -> String {
-            "test".to_owned()
+        fn get_database(&self) -> &str {
+            "test"
         }
     }
 
     #[tokio::test]
     async fn test_mongodb_upsert_documents() {
-        let mongo = MongoDB::default();
+        let config = Config::default();
+        let mongo = MongoDB::new(&config.db.mongodb);
         let collection = mongo
             .client
             .database(&mongo.config.database)
@@ -140,7 +134,7 @@ mod tests {
         collection.drop(None).await.unwrap();
 
         let persister = Persister {
-            client: mongo.client.clone(),
+            client: mongo.client,
         };
 
         persister

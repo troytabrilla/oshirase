@@ -1,52 +1,52 @@
 use serde::Deserialize;
 use std::fs;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct AggregatorConfig {
     pub ttl: usize,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct AniListAPIAuthConfig {
     pub access_token: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct AniListAPIConfig {
     pub url: String,
     pub auth: AniListAPIAuthConfig,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct MongoDBConfig {
     pub host: String,
     pub database: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct RedisConfig {
     pub host: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct DBConfig {
     pub mongodb: MongoDBConfig,
     pub redis: RedisConfig,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct EmitterConfig {
     pub similarity_threshold: f64,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct SubsPleaseScraperConfig {
     pub url: String,
     pub webdriver_url: String,
     pub chrome_options: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub aggregator: AggregatorConfig,
     pub anilist_api: AniListAPIConfig,

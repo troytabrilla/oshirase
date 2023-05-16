@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
         }),
     };
 
-    let data = Aggregator::new(config).await.run(Some(options)).await?;
+    let data = Aggregator::new(&config).await.run(Some(&options)).await?;
 
     if cli.print {
         println!("{:?}", data);

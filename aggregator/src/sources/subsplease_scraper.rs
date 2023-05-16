@@ -39,7 +39,7 @@ impl FromStr for Day {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Hash)]
 pub struct AnimeScheduleEntry {
     pub title: String,
     pub day: Day,
@@ -47,22 +47,22 @@ pub struct AnimeScheduleEntry {
 }
 
 impl Extra for AnimeScheduleEntry {
-    fn get_title(&self) -> String {
-        self.title.clone()
+    fn get_title(&self) -> &String {
+        &self.title
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AnimeSchedule(pub Vec<AnimeScheduleEntry>);
 
-pub struct SubsPleaseScraper {
-    config: SubsPleaseScraperConfig,
+pub struct SubsPleaseScraper<'a> {
+    config: &'a SubsPleaseScraperConfig,
     redis: redis::aio::ConnectionManager,
 }
 
-impl SubsPleaseScraper {
+impl SubsPleaseScraper<'_> {
     pub fn new(
-        config: SubsPleaseScraperConfig,
+        config: &SubsPleaseScraperConfig,
         redis: redis::aio::ConnectionManager,
     ) -> SubsPleaseScraper {
         SubsPleaseScraper { config, redis }
@@ -148,17 +148,17 @@ impl SubsPleaseScraper {
 }
 
 #[async_trait]
-impl Cache for SubsPleaseScraper {
+impl Cache for SubsPleaseScraper<'_> {
     fn get_connection_manager(&mut self) -> &mut redis::aio::ConnectionManager {
         &mut self.redis
     }
 }
 
 #[async_trait]
-impl Source for SubsPleaseScraper {
+impl Source<'_> for SubsPleaseScraper<'_> {
     type Data = AnimeSchedule;
 
-    async fn extract(&mut self, options: Option<ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
         let cache_key = "subsplease_scraper:extract";
 
         let skip_cache = match options {
@@ -190,10 +190,8 @@ mod tests {
     async fn test_scrape() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let scraper = SubsPleaseScraper::new(
-            config.subsplease_scraper,
-            db.redis.connection_manager.clone(),
-        );
+        let scraper =
+            SubsPleaseScraper::new(&config.subsplease_scraper, db.redis.connection_manager);
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.0.is_empty());
     }
@@ -202,14 +200,12 @@ mod tests {
     async fn test_extract() {
         let config = Config::default();
         let db = DB::new(&config.db).await;
-        let mut scraper = SubsPleaseScraper::new(
-            config.subsplease_scraper,
-            db.redis.connection_manager.clone(),
-        );
+        let mut scraper =
+            SubsPleaseScraper::new(&config.subsplease_scraper, db.redis.connection_manager);
         let options = ExtractOptions {
             skip_cache: Some(true),
         };
-        let actual = scraper.extract(Some(options)).await.unwrap();
+        let actual = scraper.extract(Some(&options)).await.unwrap();
         assert!(!actual.0.is_empty());
     }
 }
