@@ -27,6 +27,9 @@ async fn main() -> Result<()> {
         None => Config::default(),
     };
 
+    // @todo Add a worker mode that runs a worker waiting for jobs
+    // @todo Add a job queue (redis?)
+    // @todo Set up a separate chron job (in docker?) to send an aggregator job to the queue every x minutes
     let options = RunOptions {
         skip_cache: Some(cli.skip_cache),
         extract_options: Some(ExtractOptions {

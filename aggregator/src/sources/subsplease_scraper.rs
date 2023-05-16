@@ -72,7 +72,7 @@ impl SubsPleaseScraper {
         let mut caps = serde_json::map::Map::new();
         let chrome_opts: Vec<&str> = self.config.chrome_options.split_whitespace().collect();
         let chrome_opts = serde_json::json!({ "args": chrome_opts });
-        caps.insert("goog:chromeOptions".to_string(), chrome_opts.clone());
+        caps.insert("goog:chromeOptions".to_string(), chrome_opts);
 
         let client = fantoccini::ClientBuilder::native()
             .capabilities(caps)

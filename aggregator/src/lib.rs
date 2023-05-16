@@ -71,6 +71,9 @@ pub struct Aggregator {
     db: DB,
 }
 
+// @todo Reassess usage of `clone` across the project, try to avoid unnecessary cloning
+// @todo Consider better efficiency for ETL; avoid unnecessary work and copies. Look into streams?
+// @todo Need to load dependency sources before main list source, then dependencies can be merged into main list in parallel
 impl Aggregator {
     pub async fn new(config: Config) -> Aggregator {
         let db = DB::new(&config.db).await;
