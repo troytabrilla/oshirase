@@ -47,12 +47,18 @@ pub struct SubsPleaseScraperConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct WorkerConfig {
+    pub retry_timeout: usize,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub aggregator: AggregatorConfig,
     pub anilist_api: AniListAPIConfig,
     pub db: DBConfig,
-    pub transform: TransformConfig,
     pub subsplease_scraper: SubsPleaseScraperConfig,
+    pub transform: TransformConfig,
+    pub worker: WorkerConfig,
 }
 
 impl Config {

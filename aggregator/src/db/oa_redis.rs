@@ -78,16 +78,19 @@ pub trait Cache {
             }
         }
 
-        match self.get::<String>(key).await {
-            Ok(cached) => match serde_json::from_str::<T>(&cached) {
-                Ok(cached) => Some(cached),
-                Err(err) => {
-                    eprintln!("Could not parse cached value for {}: {}", key, err);
-                    None
-                }
+        match self.get::<Option<String>>(key).await {
+            Ok(cached) => match cached {
+                Some(cached) => match serde_json::from_str::<T>(&cached) {
+                    Ok(cached) => Some(cached),
+                    Err(err) => {
+                        eprintln!("Could not parse cached value for {}: {}", key, err);
+                        None
+                    }
+                },
+                None => None,
             },
             Err(err) => {
-                eprintln!("Could not get cached value for {}: {}", key, err);
+                eprintln!("Could not get key {}: {}", key, err);
                 None
             }
         }

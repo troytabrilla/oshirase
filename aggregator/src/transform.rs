@@ -11,7 +11,7 @@ pub trait Transform {
     fn set_media(media: &mut Media, extra: Option<Self::Extra>);
 
     fn transform(&self, mut media: Media, extra: &[Self::Extra]) -> Result<Media> {
-        if media.status == Some("CURRENT".to_owned()) {
+        if media.status == Some("CURRENT".to_string()) {
             let title = match media.title.to_owned() {
                 Some(title) => title,
                 None => String::new(),

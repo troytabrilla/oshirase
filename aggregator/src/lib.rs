@@ -2,8 +2,10 @@ mod config;
 mod db;
 mod sources;
 mod transform;
+mod worker;
 
 pub use config::Config;
+pub use worker::Worker;
 
 use anilist_api::*;
 use db::*;

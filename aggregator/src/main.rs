@@ -16,6 +16,9 @@ struct Cli {
 
     #[arg(short, long, help = "Print results")]
     print: bool,
+
+    #[arg(short, long, help = "Run in worker mode")]
+    worker_mode: bool,
 }
 
 #[tokio::main]
@@ -27,8 +30,6 @@ async fn main() -> Result<()> {
         None => Config::default(),
     };
 
-    // @todo Add a worker mode that runs a worker waiting for jobs
-    // @todo Add a job queue (redis?)
     // @todo Set up a separate chron job (in docker?) to send an aggregator job to the queue every x minutes
     let options = RunOptions {
         skip_cache: Some(cli.skip_cache),
@@ -37,10 +38,17 @@ async fn main() -> Result<()> {
         }),
     };
 
-    let data = Aggregator::new(&config).await.run(Some(&options)).await?;
+    let mut aggregator = Aggregator::new(&config).await;
 
-    if cli.print {
-        println!("{:?}", data);
+    if cli.worker_mode {
+        let mut worker = Worker::new(&mut aggregator);
+        worker.run(Some(&options)).await;
+    } else {
+        let data = aggregator.run(Some(&options)).await?;
+
+        if cli.print {
+            println!("{:?}", data);
+        }
     }
 
     Ok(())
