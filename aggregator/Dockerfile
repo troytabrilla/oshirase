@@ -33,7 +33,7 @@ FROM debian:bullseye-slim
 WORKDIR /usr/app
 RUN apt-get update \
     && apt-get -y upgrade \
-    && apt-get install -y wget unzip \
+    && apt-get install -y wget unzip cron redis-tools \
     && mkdir /tmp/chrome \
     && wget --no-verbose -O /tmp/chrome/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_113.0.5672.92-1_amd64.deb \
     && apt-get install -y /tmp/chrome/chrome.deb \
@@ -46,4 +46,6 @@ RUN apt-get update \
 COPY --from=build /usr/src/oshirase/aggregator/target/release/aggregator /usr/local/bin/aggregator
 COPY --from=build /usr/src/oshirase/aggregator/config/config.toml ./config/config.toml
 COPY --from=build /usr/src/oshirase/aggregator/graphql/ ./graphql/
-CMD ["/bin/bash", "-c", "chromedriver & aggregator"]
+ADD ./config/crontab /etc/crontab
+RUN crontab /etc/crontab
+CMD ["/bin/bash", "-c", "service cron start && chromedriver & aggregator -w"]

@@ -2,7 +2,7 @@ use crate::Aggregator;
 use crate::RunOptions;
 
 use redis::Commands;
-use std::time;
+use time::OffsetDateTime;
 
 const DEFAULT_RETRY_TIMEOUT: u64 = 10;
 
@@ -19,13 +19,13 @@ impl<'a> Worker<'a> {
         self.aggregator.config.worker.retry_timeout
     }
 
-    fn get_retry_timeout_duration(&self) -> time::Duration {
+    fn get_retry_timeout_duration(&self) -> std::time::Duration {
         let retry_timeout = self
             .get_retry_timeout()
             .try_into()
             .unwrap_or(DEFAULT_RETRY_TIMEOUT);
 
-        time::Duration::from_secs(retry_timeout)
+        std::time::Duration::from_secs(retry_timeout)
     }
 
     pub async fn run(&mut self, options: Option<&RunOptions>) {
@@ -44,8 +44,8 @@ impl<'a> Worker<'a> {
                     match job {
                         Ok(msg) => {
                             if msg == Some("run".to_string()) {
-                                println!("Running aggregator.");
-                                let start = time::Instant::now();
+                                println!("Running aggregator: {}.", OffsetDateTime::now_utc());
+                                let start = std::time::Instant::now();
                                 match self.aggregator.run(options).await {
                                     Ok(_) => println!(
                                         "Finished running aggregator: {:?}.",
@@ -55,7 +55,8 @@ impl<'a> Worker<'a> {
                                 };
                             }
 
-                            if let Err(err) = connection.del::<&str, ()>("failed") {
+                            if let Err(err) = connection.del::<&str, ()>("aggregator:worker:failed")
+                            {
                                 eprintln!("Could not clear failed queue: {}", err);
                             }
                         }
