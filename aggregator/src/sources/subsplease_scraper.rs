@@ -1,9 +1,10 @@
-use crate::config::SubsPleaseScraperConfig;
+use crate::config::Config;
 use crate::db::Cache;
-use crate::transformer::Extra;
 use crate::sources::Source;
+use crate::transform::Transform;
 use crate::CustomError;
 use crate::ExtractOptions;
+use crate::Media;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -39,46 +40,42 @@ impl FromStr for Day {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Hash)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub struct AnimeScheduleEntry {
     pub title: String,
     pub day: Day,
     pub time: String,
 }
 
-impl Extra for AnimeScheduleEntry {
-    fn get_title(&self) -> &String {
-        &self.title
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct AnimeSchedule(pub Vec<AnimeScheduleEntry>);
 
 pub struct SubsPleaseScraper<'a> {
-    config: &'a SubsPleaseScraperConfig,
+    config: &'a Config,
     redis: redis::aio::ConnectionManager,
 }
 
 impl SubsPleaseScraper<'_> {
-    pub fn new(
-        config: &SubsPleaseScraperConfig,
-        redis: redis::aio::ConnectionManager,
-    ) -> SubsPleaseScraper {
+    pub fn new(config: &Config, redis: redis::aio::ConnectionManager) -> SubsPleaseScraper {
         SubsPleaseScraper { config, redis }
     }
 
     async fn load_schedule_table(&self) -> Result<Html> {
         let mut caps = serde_json::map::Map::new();
-        let chrome_opts: Vec<&str> = self.config.chrome_options.split_whitespace().collect();
+        let chrome_opts: Vec<&str> = self
+            .config
+            .subsplease_scraper
+            .chrome_options
+            .split_whitespace()
+            .collect();
         let chrome_opts = serde_json::json!({ "args": chrome_opts });
         caps.insert("goog:chromeOptions".to_string(), chrome_opts);
 
         let client = fantoccini::ClientBuilder::native()
             .capabilities(caps)
-            .connect(&self.config.webdriver_url)
+            .connect(&self.config.subsplease_scraper.webdriver_url)
             .await?;
-        client.goto(&self.config.url).await?;
+        client.goto(&self.config.subsplease_scraper.url).await?;
         let locator = fantoccini::Locator::Css(".day-of-week");
         let table = client
             .wait()
@@ -179,6 +176,22 @@ impl Source<'_> for SubsPleaseScraper<'_> {
     }
 }
 
+impl Transform for SubsPleaseScraper<'_> {
+    type Extra = AnimeScheduleEntry;
+
+    fn get_similarity_threshold(&self) -> f64 {
+        self.config.transform.similarity_threshold
+    }
+
+    fn get_title(extra: &Self::Extra) -> &str {
+        &extra.title
+    }
+
+    fn set_media(mut media: &mut Media, extra: Option<Self::Extra>) {
+        media.schedule = extra;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,9 +202,8 @@ mod tests {
     #[tokio::test]
     async fn test_scrape() {
         let config = Config::default();
-        let db = DB::new(&config.db).await;
-        let scraper =
-            SubsPleaseScraper::new(&config.subsplease_scraper, db.redis.connection_manager);
+        let db = DB::new(&config).await;
+        let scraper = SubsPleaseScraper::new(&config, db.redis.connection_manager);
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.0.is_empty());
     }
@@ -199,13 +211,56 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let db = DB::new(&config.db).await;
-        let mut scraper =
-            SubsPleaseScraper::new(&config.subsplease_scraper, db.redis.connection_manager);
+        let db = DB::new(&config).await;
+        let mut scraper = SubsPleaseScraper::new(&config, db.redis.connection_manager);
         let options = ExtractOptions {
             skip_cache: Some(true),
         };
         let actual = scraper.extract(Some(&options)).await.unwrap();
         assert!(!actual.0.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_transform() {
+        let media = Media {
+            media_id: Some(1),
+            status: Some("CURRENT".to_owned()),
+            title: Some("Gintama".to_owned()),
+            alt_title: Some("Gin Tama".to_owned()),
+            media_type: None,
+            format: None,
+            season: None,
+            season_year: None,
+            image: None,
+            episodes: None,
+            score: None,
+            progress: None,
+            latest: None,
+            schedule: None,
+        };
+        let schedules = vec![
+            AnimeScheduleEntry {
+                title: "gintama".to_owned(),
+                day: Day::Saturday,
+                time: "00:00".to_owned(),
+            },
+            AnimeScheduleEntry {
+                title: "naruto".to_owned(),
+                day: Day::Monday,
+                time: "00:00".to_owned(),
+            },
+            AnimeScheduleEntry {
+                title: "tamako market".to_owned(),
+                day: Day::Friday,
+                time: "00:00".to_owned(),
+            },
+        ];
+
+        let config = Config::default();
+        let db = DB::new(&config).await;
+        let subsplease_scraper = SubsPleaseScraper::new(&config, db.redis.connection_manager);
+
+        let transformed = subsplease_scraper.transform(media, &schedules).unwrap();
+        assert_eq!(transformed.schedule, Some(schedules[0].clone()));
     }
 }

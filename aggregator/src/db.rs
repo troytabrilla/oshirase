@@ -6,7 +6,7 @@ pub use oa_mongodb::Persist;
 pub use oa_redis::Cache;
 pub use oa_redis::Redis;
 
-use crate::config::DBConfig;
+use crate::config::Config;
 
 use serde::{de::DeserializeOwned, Serialize};
 use std::hash::Hash;
@@ -19,10 +19,10 @@ pub struct DB<'a> {
 }
 
 impl<'a> DB<'_> {
-    pub async fn new(config: &'a DBConfig) -> DB {
+    pub async fn new(config: &'a Config) -> DB {
         DB {
-            mongodb: MongoDB::new(&config.mongodb),
-            redis: Redis::new(&config.redis).await,
+            mongodb: MongoDB::new(config),
+            redis: Redis::new(config).await,
         }
     }
 }

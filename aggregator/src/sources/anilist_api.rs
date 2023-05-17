@@ -1,4 +1,4 @@
-use crate::config::AniListAPIConfig;
+use crate::config::Config;
 use crate::db::Document;
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
@@ -16,7 +16,7 @@ pub struct User {
     id: u64,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Hash)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub struct Media {
     pub media_id: Option<u64>,
     pub media_type: Option<String>,
@@ -57,11 +57,11 @@ struct AniListUserQuery;
 struct AniListListQuery;
 
 pub struct AniListAPI<'a> {
-    config: &'a AniListAPIConfig,
+    config: &'a Config,
 }
 
 impl AniListAPI<'_> {
-    pub fn new(config: &AniListAPIConfig) -> AniListAPI {
+    pub fn new(config: &Config) -> AniListAPI {
         AniListAPI { config }
     }
 
@@ -89,10 +89,10 @@ impl AniListAPI<'_> {
     {
         let client = reqwest::Client::new();
         let json = client
-            .post(self.config.url.as_str())
+            .post(self.config.anilist_api.url.as_str())
             .header(
                 reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.config.auth.access_token),
+                format!("Bearer {}", self.config.anilist_api.auth.access_token),
             )
             .json(&body)
             .send()
@@ -226,7 +226,7 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_user() {
         let config = Config::default();
-        let api = AniListAPI::new(&config.anilist_api);
+        let api = AniListAPI::new(&config);
         let actual = api.fetch_user().await.unwrap();
         assert_ne!(actual.id, 0);
     }
@@ -234,7 +234,7 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_lists() {
         let config = Config::default();
-        let api = AniListAPI::new(&config.anilist_api);
+        let api = AniListAPI::new(&config);
         let user = api.fetch_user().await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
@@ -244,7 +244,7 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let mut api = AniListAPI::new(&config.anilist_api);
+        let mut api = AniListAPI::new(&config);
         let options = ExtractOptions {
             skip_cache: Some(true),
         };

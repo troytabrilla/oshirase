@@ -1,7 +1,7 @@
 mod config;
 mod db;
 mod sources;
-mod transformer;
+mod transform;
 
 pub use config::Config;
 
@@ -9,9 +9,9 @@ use anilist_api::*;
 use db::*;
 use sources::*;
 use subsplease_scraper::*;
-use transformer::*;
+use transform::*;
 
-use crossbeam_channel::bounded;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::{
     error::Error,
@@ -70,19 +70,17 @@ pub struct Aggregator<'a> {
     db: DB<'a>,
 }
 
-// @todo Consider better efficiency for ETL; avoid unnecessary work and copies. Look into streams?
-// @todo Need to load dependency sources before main list source, then dependencies can be merged into main list in parallel
 impl<'a> Aggregator<'a> {
     pub async fn new(config: &'a Config) -> Aggregator<'a> {
         Aggregator {
             config,
-            db: DB::new(&config.db).await,
+            db: DB::new(config).await,
         }
     }
 
     async fn extract(
         &mut self,
-        mut sources: Sources<'a>,
+        sources: &mut Sources<'a>,
         options: Option<&ExtractOptions>,
     ) -> Result<Data> {
         let (lists, schedule) = tokio::join!(
@@ -96,49 +94,25 @@ impl<'a> Aggregator<'a> {
         Ok(Data { lists, schedule })
     }
 
-    fn transform(&mut self, mut data: Data) -> Result<Data> {
-        let transformer = Transformer::new(&self.config.transformer);
-        let (snd, rcv) = bounded::<Transformed>(16);
-
-        let media_lite: Vec<MediaLite> = data
+    fn transform(&mut self, sources: Sources<'a>, mut data: Data) -> Result<Data> {
+        let anime = data
             .lists
             .anime
-            .iter()
-            .map(|a: &Media| MediaLite {
-                title: a.title.clone().unwrap_or(String::new()),
-                alt_title: a.alt_title.clone().unwrap_or(String::new()),
-                status: a.status.clone().unwrap_or(String::new()),
+            .par_iter()
+            .map(|anime| {
+                match sources
+                    .subsplease_scraper
+                    .transform(anime.clone(), &data.schedule.0)
+                {
+                    Ok(anime) => anime,
+                    Err(err) => {
+                        eprintln!("Could not transform media: {}", err);
+                        anime.clone()
+                    }
+                }
             })
             .collect();
-
-        let handle = crossbeam::scope(|s| {
-            // Future sources should spawn new threads to emit data to combine to main lists
-            s.spawn(|_| {
-                if let Err(err) =
-                    transformer.transform(&media_lite, &data.schedule.0, "schedule", snd)
-                {
-                    eprintln!("Error occurred in transformer thread: {}.", err);
-                }
-            });
-
-            for msg in rcv.iter() {
-                let extra = serde_json::from_str(&msg.json);
-                match extra {
-                    Ok(extra) => {
-                        if msg.key == "schedule" {
-                            data.lists.anime[msg.index].schedule = extra;
-                        }
-                    }
-                    Err(err) => {
-                        eprintln!("{}", err);
-                    }
-                }
-            }
-        });
-
-        if let Err(err) = handle {
-            eprintln!("{:?}", err);
-        }
+        data.lists.anime = anime;
 
         Ok(data)
     }
@@ -153,10 +127,10 @@ impl<'a> Aggregator<'a> {
     }
 
     pub async fn run(&mut self, options: Option<&RunOptions>) -> Result<Data> {
-        let sources = Sources {
-            anilist_api: AniListAPI::new(&self.config.anilist_api),
+        let mut sources = Sources {
+            anilist_api: AniListAPI::new(self.config),
             subsplease_scraper: SubsPleaseScraper::new(
-                &self.config.subsplease_scraper,
+                self.config,
                 self.db.redis.connection_manager.clone(),
             ),
         };
@@ -179,8 +153,8 @@ impl<'a> Aggregator<'a> {
             return Ok(cached);
         }
 
-        let data = self.extract(sources, extract_options).await?;
-        let data = self.transform(data)?;
+        let data = self.extract(&mut sources, extract_options).await?;
+        let data = self.transform(sources, data)?;
         self.load(&data).await?;
 
         self.cache_value_expire(&cache_key, &data, self.config.aggregator.ttl)
@@ -214,7 +188,7 @@ mod tests {
     #[tokio::test]
     async fn test_run() {
         let config = Config::default();
-        let mongodb = MongoDB::new(&config.db.mongodb);
+        let mongodb = MongoDB::new(&config);
         let database = mongodb.client.database("test");
         database
             .collection::<Media>("anime")
@@ -227,7 +201,7 @@ mod tests {
             .await
             .unwrap();
 
-        let redis_client = Redis::new(&config.db.redis).await.client;
+        let redis_client = Redis::new(&config).await.client;
         let mut connection = redis_client.get_connection().unwrap();
         redis::cmd("FLUSHALL").query::<()>(&mut connection).unwrap();
 

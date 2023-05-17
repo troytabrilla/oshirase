@@ -1,4 +1,4 @@
-use crate::config::RedisConfig;
+use crate::config::Config;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -11,12 +11,12 @@ const TTL_FALLBACK: usize = 86400;
 pub struct Redis<'a> {
     pub client: Client,
     pub connection_manager: ConnectionManager,
-    pub config: &'a RedisConfig,
+    pub config: &'a Config,
 }
 
 impl Redis<'_> {
-    pub async fn new(config: &RedisConfig) -> Redis {
-        let client = Client::open(config.host.as_str()).unwrap();
+    pub async fn new(config: &Config) -> Redis {
+        let client = Client::open(config.db.redis.host.as_str()).unwrap();
         let connection_manager = client.get_tokio_connection_manager().await.unwrap();
 
         Redis {
@@ -168,7 +168,7 @@ mod tests {
 
     async fn del(key: &str) {
         let config = Config::default();
-        let redis = Redis::new(&config.db.redis).await;
+        let redis = Redis::new(&config).await;
         let mut connection = redis.client.get_connection().unwrap();
         redis::cmd("DEL")
             .arg(key)
@@ -182,7 +182,7 @@ mod tests {
         del(key).await;
 
         let config = Config::default();
-        let redis = Redis::new(&config.db.redis).await;
+        let redis = Redis::new(&config).await;
 
         let expected = 420;
         let expire = 10;
@@ -210,7 +210,7 @@ mod tests {
         del(key).await;
 
         let config = Config::default();
-        let redis = Redis::new(&config.db.redis).await;
+        let redis = Redis::new(&config).await;
 
         let expected = 420;
         let expire_at =
@@ -241,7 +241,7 @@ mod tests {
         del(key).await;
 
         let config = Config::default();
-        let redis = Redis::new(&config.db.redis).await;
+        let redis = Redis::new(&config).await;
 
         let now = time::OffsetDateTime::now_utc();
         let day = now.day();

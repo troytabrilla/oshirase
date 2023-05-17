@@ -1,4 +1,4 @@
-use crate::config::MongoDBConfig;
+use crate::config::Config;
 use crate::db::Document;
 use crate::CustomError;
 use crate::Result;
@@ -14,12 +14,12 @@ use std::{collections::hash_map::DefaultHasher, hash::Hasher};
 
 pub struct MongoDB<'a> {
     pub client: mongodb::Client,
-    pub config: &'a MongoDBConfig,
+    pub config: &'a Config,
 }
 
 impl MongoDB<'_> {
-    pub fn new(config: &MongoDBConfig) -> MongoDB {
-        let address = ServerAddress::parse(&config.host).unwrap();
+    pub fn new(config: &Config) -> MongoDB {
+        let address = ServerAddress::parse(&config.db.mongodb.host).unwrap();
         let hosts = vec![address];
         let options = ClientOptions::builder()
             .hosts(hosts)
@@ -126,10 +126,10 @@ mod tests {
     #[tokio::test]
     async fn test_mongodb_upsert_documents() {
         let config = Config::default();
-        let mongo = MongoDB::new(&config.db.mongodb);
+        let mongo = MongoDB::new(&config);
         let collection = mongo
             .client
-            .database(&mongo.config.database)
+            .database(&mongo.config.db.mongodb.database)
             .collection::<Test>("test");
         collection.drop(None).await.unwrap();
 
