@@ -1,16 +1,16 @@
 use crate::Media;
 use crate::Result;
 
+use std::collections::HashMap;
+
 pub trait Transform {
     type Extra: Clone;
 
     fn get_similarity_threshold(&self) -> f64;
 
-    fn get_title(extra: &Self::Extra) -> &str;
-
     fn set_media(media: &mut Media, extra: Option<Self::Extra>);
 
-    fn transform(&self, mut media: Media, extra: &[Self::Extra]) -> Result<Media> {
+    fn transform(&self, mut media: Media, extra: &HashMap<String, Self::Extra>) -> Result<Media> {
         if media.status == Some("CURRENT".to_string()) {
             let title = match media.title.to_owned() {
                 Some(title) => title,
@@ -21,10 +21,20 @@ pub trait Transform {
                 None => String::new(),
             };
 
+            if extra.contains_key(&title) {
+                Self::set_media(&mut media, extra.get(&title).cloned());
+                return Ok(media);
+            }
+
+            if extra.contains_key(&alt_title) {
+                Self::set_media(&mut media, extra.get(&alt_title).cloned());
+                return Ok(media);
+            }
+
             let mut score_tuple: (f64, Option<&Self::Extra>) = (-f64::INFINITY, None);
-            for ex in extra {
-                let score = strsim::normalized_levenshtein(&title, Self::get_title(ex));
-                let alt_score = strsim::normalized_levenshtein(&alt_title, Self::get_title(ex));
+            for (ex_title, ex) in extra {
+                let score = strsim::normalized_levenshtein(&title, ex_title);
+                let alt_score = strsim::normalized_levenshtein(&alt_title, ex_title);
                 if score > self.get_similarity_threshold() && score > score_tuple.0 {
                     score_tuple = (score, Some(ex));
                 }

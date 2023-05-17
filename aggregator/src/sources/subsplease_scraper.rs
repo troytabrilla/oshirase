@@ -10,7 +10,7 @@ use crate::Result;
 use async_trait::async_trait;
 use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub enum Day {
@@ -48,7 +48,7 @@ pub struct AnimeScheduleEntry {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AnimeSchedule(pub Vec<AnimeScheduleEntry>);
+pub struct AnimeSchedule(pub HashMap<String, AnimeScheduleEntry>);
 
 pub struct SubsPleaseScraper<'a> {
     config: &'a Config,
@@ -107,7 +107,7 @@ impl SubsPleaseScraper<'_> {
     async fn scrape(&self) -> Result<AnimeSchedule> {
         let table = self.load_schedule_table().await?;
 
-        let mut days: AnimeSchedule = AnimeSchedule(Vec::new());
+        let mut days: AnimeSchedule = AnimeSchedule(HashMap::new());
         let mut current_day: Option<Day> = None;
 
         let tr = Selector::parse("tr");
@@ -130,11 +130,14 @@ impl SubsPleaseScraper<'_> {
                     let time = Self::extract_inner_html(".all-schedule-time", element);
 
                     if !title.is_empty() && !time.is_empty() && current_day.is_some() {
-                        days.0.push(AnimeScheduleEntry {
-                            title,
-                            time,
-                            day: current_day.clone().unwrap(),
-                        });
+                        days.0.insert(
+                            title.to_owned(),
+                            AnimeScheduleEntry {
+                                title,
+                                time,
+                                day: current_day.clone().unwrap(),
+                            },
+                        );
                     }
                 }
             }
@@ -183,10 +186,6 @@ impl Transform for SubsPleaseScraper<'_> {
         self.config.transform.similarity_threshold
     }
 
-    fn get_title(extra: &Self::Extra) -> &str {
-        &extra.title
-    }
-
     fn set_media(mut media: &mut Media, extra: Option<Self::Extra>) {
         media.schedule = extra;
     }
@@ -222,45 +221,103 @@ mod tests {
 
     #[tokio::test]
     async fn test_transform() {
-        let media = Media {
-            media_id: Some(1),
-            status: Some("CURRENT".to_owned()),
-            title: Some("Gintama".to_owned()),
-            alt_title: Some("Gin Tama".to_owned()),
-            media_type: None,
-            format: None,
-            season: None,
-            season_year: None,
-            image: None,
-            episodes: None,
-            score: None,
-            progress: None,
-            latest: None,
-            schedule: None,
-        };
-        let schedules = vec![
-            AnimeScheduleEntry {
-                title: "gintama".to_owned(),
-                day: Day::Saturday,
-                time: "00:00".to_owned(),
+        let media = [
+            Media {
+                media_id: Some(1),
+                status: Some("CURRENT".to_owned()),
+                title: Some("Gintama".to_owned()),
+                alt_title: Some("Gin Tama".to_owned()),
+                media_type: None,
+                format: None,
+                season: None,
+                season_year: None,
+                image: None,
+                episodes: None,
+                score: None,
+                progress: None,
+                latest: None,
+                schedule: None,
             },
-            AnimeScheduleEntry {
-                title: "naruto".to_owned(),
-                day: Day::Monday,
-                time: "00:00".to_owned(),
+            Media {
+                media_id: Some(1),
+                status: Some("CURRENT".to_owned()),
+                title: Some("naruto".to_owned()),
+                alt_title: None,
+                media_type: None,
+                format: None,
+                season: None,
+                season_year: None,
+                image: None,
+                episodes: None,
+                score: None,
+                progress: None,
+                latest: None,
+                schedule: None,
             },
-            AnimeScheduleEntry {
-                title: "tamako market".to_owned(),
-                day: Day::Friday,
-                time: "00:00".to_owned(),
+            Media {
+                media_id: Some(1),
+                status: Some("CURRENT".to_owned()),
+                title: None,
+                alt_title: Some("tamako market".to_owned()),
+                media_type: None,
+                format: None,
+                season: None,
+                season_year: None,
+                image: None,
+                episodes: None,
+                score: None,
+                progress: None,
+                latest: None,
+                schedule: None,
             },
         ];
+        let schedules = HashMap::from([
+            (
+                "gintama".to_owned(),
+                AnimeScheduleEntry {
+                    title: "gintama".to_owned(),
+                    day: Day::Saturday,
+                    time: "00:00".to_owned(),
+                },
+            ),
+            (
+                "naruto".to_owned(),
+                AnimeScheduleEntry {
+                    title: "naruto".to_owned(),
+                    day: Day::Monday,
+                    time: "00:00".to_owned(),
+                },
+            ),
+            (
+                "tamako market".to_owned(),
+                AnimeScheduleEntry {
+                    title: "tamako market".to_owned(),
+                    day: Day::Friday,
+                    time: "00:00".to_owned(),
+                },
+            ),
+        ]);
 
         let config = Config::default();
         let db = DB::new(&config).await;
         let subsplease_scraper = SubsPleaseScraper::new(&config, db.redis.connection_manager);
 
-        let transformed = subsplease_scraper.transform(media, &schedules).unwrap();
-        assert_eq!(transformed.schedule, Some(schedules[0].clone()));
+        let transformed = subsplease_scraper
+            .transform(media[0].clone(), &schedules)
+            .unwrap();
+        assert_eq!(transformed.schedule, schedules.get("gintama").cloned());
+
+        let transformed = subsplease_scraper
+            .transform(media[1].clone(), &schedules)
+            .unwrap();
+        assert_eq!(transformed.schedule, schedules.get("naruto").cloned());
+
+        let transformed = subsplease_scraper
+            .transform(media[2].clone(), &schedules)
+            .unwrap();
+        assert_eq!(
+            transformed.schedule,
+            schedules.get("tamako market").cloned()
+        );
     }
 }
