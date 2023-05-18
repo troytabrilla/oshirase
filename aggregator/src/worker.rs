@@ -42,16 +42,22 @@ impl<'a> Worker<'a> {
                     );
                     match job {
                         Ok(msg) => {
-                            if msg == Some("run".to_string()) {
-                                println!("Running aggregator: {}.", OffsetDateTime::now_utc());
-                                let start = std::time::Instant::now();
-                                match self.aggregator.run().await {
-                                    Ok(_) => println!(
-                                        "Finished running aggregator: {:?}.",
-                                        start.elapsed()
-                                    ),
-                                    Err(err) => eprintln!("Could not run aggregator: {}", err),
-                                };
+                            if let Some(msg) = msg {
+                                if &msg == "run:all" {
+                                    println!(
+                                        "Running aggregator for {}: {}.",
+                                        msg,
+                                        OffsetDateTime::now_utc()
+                                    );
+                                    let start = std::time::Instant::now();
+                                    match self.aggregator.run().await {
+                                        Ok(_) => println!(
+                                            "Finished running aggregator: {:?}.",
+                                            start.elapsed()
+                                        ),
+                                        Err(err) => eprintln!("Could not run aggregator: {}", err),
+                                    };
+                                }
                             }
 
                             if let Err(err) = connection.del::<&str, ()>("aggregator:worker:failed")
