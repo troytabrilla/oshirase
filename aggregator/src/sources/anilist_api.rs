@@ -3,7 +3,6 @@ use crate::db::Document;
 use crate::error::CustomError;
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
-use crate::ExtractOptions;
 use crate::Result;
 
 use async_trait::async_trait;
@@ -192,22 +191,13 @@ impl AniListAPI<'_> {
 
         Ok(lists)
     }
-
-    pub async fn get_cache_key(&self, key: &str, user: Option<&User>) -> Result<String> {
-        let user_id = match user {
-            Some(user) => user.id,
-            None => self.fetch_user().await?.id,
-        };
-
-        Ok(format!("{}:{}", key, user_id))
-    }
 }
 
 #[async_trait]
 impl Source<'_> for AniListAPI<'_> {
     type Data = MediaLists;
 
-    async fn extract(&mut self, _options: Option<&ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&mut self) -> Result<Self::Data> {
         let user = self.fetch_user().await?;
         let data = self.fetch_lists(user.id).await?;
 
@@ -219,7 +209,6 @@ impl Source<'_> for AniListAPI<'_> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::ExtractOptions;
 
     #[tokio::test]
     async fn test_fetch_user() {
@@ -243,10 +232,7 @@ mod tests {
     async fn test_extract() {
         let config = Config::default();
         let mut api = AniListAPI::new(&config);
-        let options = ExtractOptions {
-            skip_cache: Some(true),
-        };
-        let actual = api.extract(Some(&options)).await.unwrap();
+        let actual = api.extract().await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

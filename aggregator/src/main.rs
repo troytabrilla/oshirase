@@ -30,21 +30,13 @@ async fn main() -> Result<()> {
         None => Config::default(),
     };
 
-    // @todo Set up a separate chron job (in docker?) to send an aggregator job to the queue every x minutes
-    let options = RunOptions {
-        skip_cache: Some(cli.skip_cache),
-        extract_options: Some(ExtractOptions {
-            skip_cache: Some(cli.skip_cache),
-        }),
-    };
-
     let mut aggregator = Aggregator::new(&config).await;
 
     if cli.worker_mode {
         let mut worker = Worker::new(&mut aggregator);
-        worker.run(Some(&options)).await;
+        worker.run().await;
     } else {
-        let data = aggregator.run(Some(&options)).await?;
+        let data = aggregator.run().await?;
 
         if cli.print {
             println!("{:?}", data);

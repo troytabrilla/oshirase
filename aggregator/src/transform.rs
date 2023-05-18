@@ -16,6 +16,7 @@ pub trait Transform {
                 Some(title) => title,
                 None => String::new(),
             };
+            // @todo Add support for user-provided alt titles (new source)
             let alt_title = match media.alt_title.to_owned() {
                 Some(alt_title) => alt_title,
                 None => String::new(),

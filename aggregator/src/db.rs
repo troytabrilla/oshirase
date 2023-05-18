@@ -3,7 +3,6 @@ mod oa_redis;
 
 pub use oa_mongodb::MongoDB;
 pub use oa_mongodb::Persist;
-pub use oa_redis::Cache;
 pub use oa_redis::Redis;
 
 use crate::config::Config;
@@ -22,7 +21,7 @@ impl<'a> DB<'_> {
     pub async fn new(config: &'a Config) -> DB {
         DB {
             mongodb: MongoDB::new(config),
-            redis: Redis::new(config).await,
+            redis: Redis::new(config),
         }
     }
 }

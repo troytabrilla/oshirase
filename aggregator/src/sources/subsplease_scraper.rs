@@ -1,9 +1,7 @@
 use crate::config::Config;
-use crate::db::Cache;
 use crate::error::CustomError;
 use crate::sources::Source;
 use crate::transform::Transform;
-use crate::ExtractOptions;
 use crate::Media;
 use crate::Result;
 
@@ -52,12 +50,11 @@ pub struct AnimeSchedule(pub HashMap<String, AnimeScheduleEntry>);
 
 pub struct SubsPleaseScraper<'a> {
     config: &'a Config,
-    redis: redis::aio::ConnectionManager,
 }
 
 impl SubsPleaseScraper<'_> {
-    pub fn new(config: &Config, redis: redis::aio::ConnectionManager) -> SubsPleaseScraper {
-        SubsPleaseScraper { config, redis }
+    pub fn new(config: &Config) -> SubsPleaseScraper {
+        SubsPleaseScraper { config }
     }
 
     async fn load_schedule_table(&self) -> Result<Html> {
@@ -148,32 +145,11 @@ impl SubsPleaseScraper<'_> {
 }
 
 #[async_trait]
-impl Cache for SubsPleaseScraper<'_> {
-    fn get_connection_manager(&mut self) -> &mut redis::aio::ConnectionManager {
-        &mut self.redis
-    }
-}
-
-#[async_trait]
 impl Source<'_> for SubsPleaseScraper<'_> {
     type Data = AnimeSchedule;
 
-    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
-        let cache_key = "subsplease_scraper:extract";
-
-        let skip_cache = match options {
-            Some(options) => options.skip_cache.unwrap_or(false),
-            None => false,
-        };
-
-        if let Some(cached) = self.get_cached(cache_key, Some(skip_cache)).await {
-            println!("Got cached value for cache key: {}.", cache_key);
-            return Ok(cached);
-        }
-
+    async fn extract(&mut self) -> Result<Self::Data> {
         let data = self.scrape().await?;
-
-        self.cache_value_expire_tomorrow(cache_key, &data).await;
 
         Ok(data)
     }
@@ -195,14 +171,11 @@ impl Transform for SubsPleaseScraper<'_> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::db::DB;
-    use crate::ExtractOptions;
 
     #[tokio::test]
     async fn test_scrape() {
         let config = Config::default();
-        let db = DB::new(&config).await;
-        let scraper = SubsPleaseScraper::new(&config, db.redis.connection_manager);
+        let scraper = SubsPleaseScraper::new(&config);
         let actual = scraper.scrape().await.unwrap();
         assert!(!actual.0.is_empty());
     }
@@ -210,12 +183,8 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let db = DB::new(&config).await;
-        let mut scraper = SubsPleaseScraper::new(&config, db.redis.connection_manager);
-        let options = ExtractOptions {
-            skip_cache: Some(true),
-        };
-        let actual = scraper.extract(Some(&options)).await.unwrap();
+        let mut scraper = SubsPleaseScraper::new(&config);
+        let actual = scraper.extract().await.unwrap();
         assert!(!actual.0.is_empty());
     }
 
@@ -299,8 +268,7 @@ mod tests {
         ]);
 
         let config = Config::default();
-        let db = DB::new(&config).await;
-        let subsplease_scraper = SubsPleaseScraper::new(&config, db.redis.connection_manager);
+        let subsplease_scraper = SubsPleaseScraper::new(&config);
 
         let transformed = subsplease_scraper
             .transform(media[0].clone(), &schedules)

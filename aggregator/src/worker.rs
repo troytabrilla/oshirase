@@ -1,5 +1,4 @@
 use crate::Aggregator;
-use crate::RunOptions;
 
 use redis::Commands;
 use time::OffsetDateTime;
@@ -28,7 +27,7 @@ impl<'a> Worker<'a> {
         std::time::Duration::from_secs(retry_timeout)
     }
 
-    pub async fn run(&mut self, options: Option<&RunOptions>) {
+    pub async fn run(&mut self) {
         let retry_timeout = self.aggregator.config.worker.retry_timeout;
 
         let client = &self.aggregator.db.redis.client.clone();
@@ -46,7 +45,7 @@ impl<'a> Worker<'a> {
                             if msg == Some("run".to_string()) {
                                 println!("Running aggregator: {}.", OffsetDateTime::now_utc());
                                 let start = std::time::Instant::now();
-                                match self.aggregator.run(options).await {
+                                match self.aggregator.run().await {
                                     Ok(_) => println!(
                                         "Finished running aggregator: {:?}.",
                                         start.elapsed()
