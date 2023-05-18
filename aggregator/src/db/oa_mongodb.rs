@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::future::try_join_all;
 use mongodb::{
     bson::doc,
-    options::{ClientOptions, FindOneAndUpdateOptions, IndexOptions, ServerAddress},
+    options::{ClientOptions, FindOneAndUpdateOptions, IndexOptions},
     IndexModel,
 };
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
@@ -18,13 +18,9 @@ pub struct MongoDB<'a> {
 }
 
 impl MongoDB<'_> {
-    pub fn new(config: &Config) -> MongoDB {
-        let address = ServerAddress::parse(&config.db.mongodb.host).unwrap();
-        let hosts = vec![address];
-        let options = ClientOptions::builder()
-            .hosts(hosts)
-            .app_name("oshirase-aggregator".to_owned())
-            .build();
+    pub async fn new(config: &Config) -> MongoDB {
+        let mut options = ClientOptions::parse(&config.db.mongodb.uri).await.unwrap();
+        options.app_name = Some("oshirase-aggregator".to_owned());
         let client = mongodb::Client::with_options(options).unwrap();
 
         MongoDB { client, config }
@@ -126,7 +122,7 @@ mod tests {
     #[tokio::test]
     async fn test_mongodb_upsert_documents() {
         let config = Config::default();
-        let mongo = MongoDB::new(&config);
+        let mongo = MongoDB::new(&config).await;
         let collection = mongo
             .client
             .database(&mongo.config.db.mongodb.database)

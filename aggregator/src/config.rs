@@ -19,13 +19,13 @@ pub struct AniListAPIConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct MongoDBConfig {
-    pub host: String,
+    pub uri: String,
     pub database: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct RedisConfig {
-    pub host: String,
+    pub uri: String,
 }
 
 #[derive(Debug, Deserialize)]

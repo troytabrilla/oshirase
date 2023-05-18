@@ -122,7 +122,7 @@ mod tests {
     #[tokio::test]
     async fn test_run() {
         let config = Config::default();
-        let mongodb = MongoDB::new(&config);
+        let mongodb = MongoDB::new(&config).await;
         let database = mongodb.client.database("test");
         database
             .collection::<Media>("anime")

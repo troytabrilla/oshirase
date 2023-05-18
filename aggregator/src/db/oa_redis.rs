@@ -7,7 +7,7 @@ pub struct Redis<'a> {
 
 impl Redis<'_> {
     pub fn new(config: &Config) -> Redis {
-        let client = redis::Client::open(config.db.redis.host.as_str()).unwrap();
+        let client = redis::Client::open(config.db.redis.uri.as_str()).unwrap();
 
         Redis { client, config }
     }
