@@ -1,8 +1,8 @@
 use crate::config::Config;
 use crate::db::Document;
+use crate::error::CustomError;
 use crate::sources::Source;
 use crate::subsplease_scraper::AnimeScheduleEntry;
-use crate::CustomError;
 use crate::ExtractOptions;
 use crate::Result;
 
@@ -162,9 +162,7 @@ impl AniListAPI<'_> {
 
                 Ok(list)
             }
-            None => Err(Box::new(CustomError {
-                message: "No response to transform.".to_owned(),
-            })),
+            None => Err(CustomError::boxed("No response to transform.")),
         }
     }
 

@@ -1,10 +1,12 @@
 mod config;
 mod db;
+mod error;
 mod sources;
 mod transform;
 mod worker;
 
 pub use config::Config;
+pub use error::CustomError;
 pub use worker::Worker;
 
 use anilist_api::*;
@@ -15,37 +17,9 @@ use transform::*;
 
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::{
-    error::Error,
-    fmt::{Display, Formatter, Result as FmtResult},
-};
+use std::error::Error;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
-
-#[derive(Debug)]
-pub struct CustomError {
-    message: String,
-}
-
-impl CustomError {
-    pub fn new(message: &str) -> CustomError {
-        CustomError {
-            message: message.to_owned(),
-        }
-    }
-
-    fn boxed(message: &str) -> Box<CustomError> {
-        Box::new(CustomError::new(message))
-    }
-}
-
-impl Display for CustomError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "{}", self.message)
-    }
-}
-
-impl Error for CustomError {}
 
 pub struct ExtractOptions {
     pub skip_cache: Option<bool>,
