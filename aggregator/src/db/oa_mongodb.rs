@@ -31,9 +31,9 @@ impl MongoDB<'_> {
     pub async fn init(config: &Config) -> MongoDB {
         let mongodb = MongoDB::new(config).await;
 
-        let anime_media_id_future = mongodb.create_unique_index::<User>("users", "id");
-        let anime_hash_future = mongodb.create_unique_index::<Media>("anime", "hash");
+        let anime_media_id_future = mongodb.create_unique_index::<Media>("anime", "media_id");
         let manga_media_id_future = mongodb.create_unique_index::<Media>("manga", "media_id");
+        let anime_hash_future = mongodb.create_unique_index::<Media>("anime", "hash");
         let manga_hash_future = mongodb.create_unique_index::<Media>("manga", "hash");
         let user_future = mongodb.create_unique_index::<User>("users", "id");
 
