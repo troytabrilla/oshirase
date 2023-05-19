@@ -146,11 +146,14 @@ mod tests {
     async fn test_run() {
         ONCE.get_or_init(init).await;
         let config = Config::default();
-        let mongodb = MongoDB::new(&config).await;
-        let database = mongodb.client.database("test");
-
         let mut aggregator = Aggregator::new(&config).await;
         aggregator.run(None).await.unwrap();
+
+        let database = aggregator
+            .db
+            .mongodb
+            .client
+            .database(&config.db.mongodb.database);
 
         let anime: bson::Document = database
             .collection("anime")

@@ -62,10 +62,6 @@ pub mod helpers {
         let mut connection = db.redis.client.get_connection().unwrap();
         redis::cmd("FLUSHALL").query::<()>(&mut connection).unwrap();
 
-        initializer
-            .create_unique_index::<User>("users", "id")
-            .await
-            .unwrap();
         database
             .collection("users")
             .insert_one(

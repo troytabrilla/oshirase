@@ -20,7 +20,7 @@ pub struct DB<'a> {
 impl<'a> DB<'_> {
     pub async fn new(config: &'a Config) -> DB {
         DB {
-            mongodb: MongoDB::new(config).await,
+            mongodb: MongoDB::init(config).await,
             redis: Redis::new(config),
         }
     }

@@ -1,7 +1,9 @@
 use crate::config::Config;
 use crate::db::Document;
 use crate::CustomError;
+use crate::Media;
 use crate::Result;
+use crate::User;
 
 use async_trait::async_trait;
 use futures::future::try_join_all;
@@ -25,6 +27,44 @@ impl MongoDB<'_> {
 
         MongoDB { client, config }
     }
+
+    pub async fn init(config: &Config) -> MongoDB {
+        let mongodb = MongoDB::new(config).await;
+
+        let anime_media_id_future = mongodb.create_unique_index::<User>("users", "id");
+        let anime_hash_future = mongodb.create_unique_index::<Media>("anime", "hash");
+        let manga_media_id_future = mongodb.create_unique_index::<Media>("manga", "media_id");
+        let manga_hash_future = mongodb.create_unique_index::<Media>("manga", "hash");
+        let user_future = mongodb.create_unique_index::<User>("users", "id");
+
+        tokio::try_join!(
+            anime_media_id_future,
+            anime_hash_future,
+            manga_media_id_future,
+            manga_hash_future,
+            user_future
+        )
+        .unwrap();
+
+        mongodb
+    }
+
+    async fn create_unique_index<T>(&self, collection: &str, key: &str) -> Result<()>
+    where
+        T: Document,
+    {
+        let database = self.client.database(&self.config.db.mongodb.database);
+        let collection = database.collection::<T>(collection);
+
+        let index_options = IndexOptions::builder().unique(true).build();
+        let index = IndexModel::builder()
+            .keys(doc! { format!("{}", key): 1 })
+            .options(index_options)
+            .build();
+        collection.create_index(index, None).await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -43,23 +83,6 @@ pub trait Persist {
         format!("{:x}", hash)
     }
 
-    async fn create_unique_index<T>(&self, collection: &str, key: &str) -> Result<()>
-    where
-        T: Document,
-    {
-        let database = self.get_client().database(self.get_database());
-        let collection = database.collection::<T>(collection);
-
-        let index_options = IndexOptions::builder().unique(true).build();
-        let index = IndexModel::builder()
-            .keys(doc! { format!("{}", key): 1 })
-            .options(index_options)
-            .build();
-        collection.create_index(index, None).await?;
-
-        Ok(())
-    }
-
     async fn upsert_documents<T>(
         &self,
         collection: &str,
@@ -69,9 +92,6 @@ pub trait Persist {
     where
         T: Document,
     {
-        self.create_unique_index::<T>(collection, id_key).await?;
-        self.create_unique_index::<T>(collection, "hash").await?;
-
         let database = self.get_client().database(self.get_database());
         let collection = database.collection::<T>(collection);
 
@@ -130,7 +150,7 @@ mod tests {
     #[tokio::test]
     async fn test_mongodb_upsert_documents() {
         let config = Config::default();
-        let mongo = MongoDB::new(&config).await;
+        let mongo = MongoDB::init(&config).await;
         let collection = mongo
             .client
             .database(&mongo.config.db.mongodb.database)
