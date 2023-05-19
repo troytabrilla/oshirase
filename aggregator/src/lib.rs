@@ -2,6 +2,7 @@ mod config;
 mod db;
 mod error;
 mod sources;
+mod test;
 mod transform;
 mod worker;
 
@@ -46,10 +47,10 @@ impl<'a> Aggregator<'a> {
         }
     }
 
-    async fn extract(&mut self, sources: &mut Sources<'a>) -> Result<Data> {
+    async fn extract(&mut self, sources: &mut Sources<'a>, id: Option<u64>) -> Result<Data> {
         let (lists, schedule) = tokio::join!(
-            sources.anilist_api.extract(),
-            sources.subsplease_scraper.extract()
+            sources.anilist_api.extract(id),
+            sources.subsplease_scraper.extract(id)
         );
 
         let lists = lists?;
@@ -82,21 +83,21 @@ impl<'a> Aggregator<'a> {
     }
 
     async fn load(&self, data: &Data) -> Result<()> {
-        let anime_future = self.upsert_documents("anime", "media_id", &data.lists.anime);
-        let manga_future = self.upsert_documents("manga", "media_id", &data.lists.manga);
+        let anime_future = self.upsert_documents("anime", &data.lists.anime, "media_id");
+        let manga_future = self.upsert_documents("manga", &data.lists.manga, "media_id");
 
         tokio::try_join!(anime_future, manga_future)?;
 
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<Data> {
+    pub async fn run(&mut self, id: Option<u64>) -> Result<Data> {
         let mut sources = Sources {
-            anilist_api: AniListAPI::new(self.config),
+            anilist_api: AniListAPI::new(self.config, self.db.mongodb.client.clone()),
             subsplease_scraper: SubsPleaseScraper::new(self.config),
         };
 
-        let data = self.extract(&mut sources).await?;
+        let data = self.extract(&mut sources, id).await?;
         let data = self.transform(sources, data)?;
         self.load(&data).await?;
 
@@ -117,43 +118,29 @@ impl Persist for Aggregator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test::helpers::{init, Fixtures, ONCE};
+
     use mongodb::bson::doc;
 
     #[tokio::test]
     async fn test_run() {
+        ONCE.get_or_init(init).await;
         let config = Config::default();
+        let fixtures = Fixtures::default();
         let mongodb = MongoDB::new(&config).await;
         let database = mongodb.client.database("test");
-        database
-            .collection::<Media>("anime")
-            .drop(None)
-            .await
-            .unwrap();
-        database
-            .collection::<Media>("manga")
-            .drop(None)
-            .await
-            .unwrap();
-
-        let redis_client = Redis::new(&config).client;
-        let mut connection = redis_client.get_connection().unwrap();
-        redis::cmd("FLUSHALL").query::<()>(&mut connection).unwrap();
 
         let mut aggregator = Aggregator::new(&config).await;
-        aggregator.run().await.unwrap();
+        aggregator.run(Some(fixtures.user.id)).await.unwrap();
 
-        let anime: bson::Document = mongodb
-            .client
-            .database("test")
+        let anime: bson::Document = database
             .collection("anime")
             .find_one(doc! { "media_id": 918 }, None)
             .await
             .unwrap()
             .unwrap();
 
-        let manga: bson::Document = mongodb
-            .client
-            .database("test")
+        let manga: bson::Document = database
             .collection("manga")
             .find_one(doc! { "media_id": 30044 }, None)
             .await

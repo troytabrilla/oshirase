@@ -11,11 +11,11 @@ struct Cli {
     #[arg(short, long, help = "Path to config.toml")]
     config: Option<String>,
 
-    #[arg(short, long, help = "Skip cache check")]
-    skip_cache: bool,
-
     #[arg(short, long, help = "Print results")]
     print: bool,
+
+    #[arg(short, long, help = "AniList user ID")]
+    user_id: Option<u64>,
 
     #[arg(short, long, help = "Run in worker mode")]
     worker_mode: bool,
@@ -36,7 +36,7 @@ async fn main() -> Result<()> {
         let mut worker = Worker::new(&mut aggregator);
         worker.run().await;
     } else {
-        let data = aggregator.run().await?;
+        let data = aggregator.run(cli.user_id).await?;
 
         if cli.print {
             println!("{:?}", data);

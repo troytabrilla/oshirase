@@ -148,7 +148,7 @@ impl SubsPleaseScraper<'_> {
 impl Source<'_> for SubsPleaseScraper<'_> {
     type Data = AnimeSchedule;
 
-    async fn extract(&mut self) -> Result<Self::Data> {
+    async fn extract(&mut self, _id: Option<u64>) -> Result<Self::Data> {
         let data = self.scrape().await?;
 
         Ok(data)
@@ -184,7 +184,7 @@ mod tests {
     async fn test_extract() {
         let config = Config::default();
         let mut scraper = SubsPleaseScraper::new(&config);
-        let actual = scraper.extract().await.unwrap();
+        let actual = scraper.extract(None).await.unwrap();
         assert!(!actual.0.is_empty());
     }
 

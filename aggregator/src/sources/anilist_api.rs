@@ -6,14 +6,19 @@ use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::Result;
 
 use async_trait::async_trait;
+use bson::doc;
 use graphql_client::GraphQLQuery;
 use serde::{Deserialize, Serialize};
 
 type Json = serde_json::Value;
 
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub struct User {
-    id: u64,
+    pub id: u64,
+    pub name: String,
 }
+
+impl Document for User {}
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub struct Media {
@@ -44,24 +49,18 @@ pub struct MediaLists {
 #[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/anilist/schema.json",
-    query_path = "graphql/anilist/user_query.graphql"
-)]
-struct AniListUserQuery;
-
-#[derive(GraphQLQuery)]
-#[graphql(
-    schema_path = "graphql/anilist/schema.json",
     query_path = "graphql/anilist/list_query.graphql"
 )]
 struct AniListListQuery;
 
 pub struct AniListAPI<'a> {
     config: &'a Config,
+    mongodb: mongodb::Client,
 }
 
 impl AniListAPI<'_> {
-    pub fn new(config: &Config) -> AniListAPI {
-        AniListAPI { config }
+    pub fn new(config: &Config, mongodb: mongodb::Client) -> AniListAPI {
+        AniListAPI { config, mongodb }
     }
 
     fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
@@ -89,10 +88,6 @@ impl AniListAPI<'_> {
         let client = reqwest::Client::new();
         let json = client
             .post(self.config.anilist_api.url.as_str())
-            .header(
-                reqwest::header::AUTHORIZATION,
-                format!("Bearer {}", self.config.anilist_api.auth.access_token),
-            )
             .json(&body)
             .send()
             .await?
@@ -102,18 +97,22 @@ impl AniListAPI<'_> {
         Ok(json)
     }
 
-    pub async fn fetch_user(&self) -> Result<User> {
-        let variables = ani_list_user_query::Variables {};
-        let body = AniListUserQuery::build_query(variables);
+    pub async fn fetch_user(&self, id: Option<u64>) -> Result<User> {
+        let filter = match id {
+            Some(id) => {
+                doc! { "id": id as i64 }
+            }
+            None => doc! {},
+        };
+        // @todo For now, just fetch one user, eventually want to process all users
+        let user: Option<User> = self
+            .mongodb
+            .database(&self.config.db.mongodb.database)
+            .collection("users")
+            .find_one(filter, None)
+            .await?;
 
-        let json = self.fetch(&body).await?;
-
-        Ok(User {
-            id: match Self::extract_value_as_u64(&json, "/data/Viewer/id") {
-                Some(id) => id,
-                None => return Err(CustomError::boxed("Could not find user ID.")),
-            },
-        })
+        user.ok_or(CustomError::boxed("Could not find user."))
     }
 
     fn transform(&self, json: Option<&Vec<Json>>) -> Result<Vec<Media>> {
@@ -197,8 +196,8 @@ impl AniListAPI<'_> {
 impl Source<'_> for AniListAPI<'_> {
     type Data = MediaLists;
 
-    async fn extract(&mut self) -> Result<Self::Data> {
-        let user = self.fetch_user().await?;
+    async fn extract(&mut self, id: Option<u64>) -> Result<Self::Data> {
+        let user = self.fetch_user(id).await?;
         let data = self.fetch_lists(user.id).await?;
 
         Ok(data)
@@ -209,20 +208,17 @@ impl Source<'_> for AniListAPI<'_> {
 mod tests {
     use super::*;
     use crate::config::Config;
-
-    #[tokio::test]
-    async fn test_fetch_user() {
-        let config = Config::default();
-        let api = AniListAPI::new(&config);
-        let actual = api.fetch_user().await.unwrap();
-        assert_ne!(actual.id, 0);
-    }
+    use crate::db::DB;
+    use crate::test::helpers::{init, Fixtures, ONCE};
 
     #[tokio::test]
     async fn test_fetch_lists() {
+        ONCE.get_or_init(init).await;
         let config = Config::default();
-        let api = AniListAPI::new(&config);
-        let user = api.fetch_user().await.unwrap();
+        let fixtures = Fixtures::default();
+        let db = DB::new(&config).await;
+        let api = AniListAPI::new(&config, db.mongodb.client);
+        let user = api.fetch_user(Some(fixtures.user.id)).await.unwrap();
         let actual = api.fetch_lists(user.id).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
@@ -230,9 +226,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_extract() {
+        ONCE.get_or_init(init).await;
         let config = Config::default();
-        let mut api = AniListAPI::new(&config);
-        let actual = api.extract().await.unwrap();
+        let fixtures = Fixtures::default();
+        let db = DB::new(&config).await;
+        let mut api = AniListAPI::new(&config, db.mongodb.client);
+        let actual = api.extract(Some(fixtures.user.id)).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

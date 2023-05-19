@@ -1,6 +1,0 @@
-query AniListUserQuery {
-    Viewer {
-        id
-        name
-    }
-}

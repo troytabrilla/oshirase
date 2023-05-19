@@ -43,12 +43,7 @@ pub trait Persist {
         format!("{:x}", hash)
     }
 
-    async fn upsert_documents<T>(
-        &self,
-        collection: &str,
-        id_key: &str,
-        documents: &Vec<T>,
-    ) -> Result<()>
+    async fn create_unique_index<T>(&self, collection: &str, key: &str) -> Result<()>
     where
         T: Document,
     {
@@ -56,16 +51,29 @@ pub trait Persist {
         let collection = database.collection::<T>(collection);
 
         let index_options = IndexOptions::builder().unique(true).build();
-        let id_index = IndexModel::builder()
-            .keys(doc! { format!("{}", id_key): 1 })
+        let index = IndexModel::builder()
+            .keys(doc! { format!("{}", key): 1 })
             .options(index_options.clone())
             .build();
-        collection.create_index(id_index, None).await?;
-        let hash_index = IndexModel::builder()
-            .keys(doc! { "hash": 1 })
-            .options(index_options)
-            .build();
-        collection.create_index(hash_index, None).await?;
+        collection.create_index(index, None).await?;
+
+        Ok(())
+    }
+
+    async fn upsert_documents<T>(
+        &self,
+        collection: &str,
+        documents: &[T],
+        id_key: &str,
+    ) -> Result<()>
+    where
+        T: Document,
+    {
+        self.create_unique_index::<T>(collection, id_key).await?;
+        self.create_unique_index::<T>(collection, "hash").await?;
+
+        let database = self.get_client().database(self.get_database());
+        let collection = database.collection::<T>(collection);
 
         let mut futures = Vec::new();
 
@@ -136,11 +144,11 @@ mod tests {
         persister
             .upsert_documents(
                 "test",
-                "test",
-                &vec![Test {
+                &[Test {
                     test: "test".to_owned(),
                     extra: 21,
                 }],
+                "test",
             )
             .await
             .unwrap();
@@ -155,11 +163,11 @@ mod tests {
         persister
             .upsert_documents(
                 "test",
-                "test",
-                &vec![Test {
+                &[Test {
                     test: "test".to_owned(),
                     extra: 42,
                 }],
+                "test",
             )
             .await
             .unwrap();

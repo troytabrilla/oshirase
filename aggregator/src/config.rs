@@ -7,14 +7,8 @@ pub struct AggregatorConfig {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AniListAPIAuthConfig {
-    pub access_token: String,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct AniListAPIConfig {
     pub url: String,
-    pub auth: AniListAPIAuthConfig,
 }
 
 #[derive(Debug, Deserialize)]

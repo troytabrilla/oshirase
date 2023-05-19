@@ -10,5 +10,5 @@ use serde::Serialize;
 pub trait Source<'a> {
     type Data: Serialize;
 
-    async fn extract(&mut self) -> Result<Self::Data>;
+    async fn extract(&mut self, id: Option<u64>) -> Result<Self::Data>;
 }
