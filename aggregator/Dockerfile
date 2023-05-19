@@ -12,18 +12,14 @@ COPY ./config/config.docker.toml ./config/config.toml
 RUN touch -a -m ./src/main.rs
 
 FROM base as test
-RUN apt-get update \
-    && apt-get -y upgrade \
-    && apt-get install -y wget \
-    && mkdir /tmp/chrome \
-    && wget --no-verbose -O /tmp/chrome/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_113.0.5672.92-1_amd64.deb \
-    && apt-get install -y /tmp/chrome/chrome.deb \
-    && wget --no-verbose -O /tmp/chrome/chromedriver.zip https://chromedriver.storage.googleapis.com/113.0.5672.63/chromedriver_linux64.zip \
-    && unzip /tmp/chrome/chromedriver.zip -d /tmp/chrome \
-    && chmod +x /tmp/chrome/chromedriver \
-    && mv /tmp/chrome/chromedriver /usr/local/bin \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/chrome
+RUN wget --no-verbose -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/113.0.5672.63/chromedriver_linux64.zip \
+    && unzip -j /tmp/chromedriver.zip 'chromedriver' -d /usr/local/bin \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm /tmp/chromedriver.zip
+RUN wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_113.0.5672.92-1_amd64.deb
+RUN apt-get update && apt-get -y upgrade && apt-get install -y \
+    /tmp/chrome.deb \
+    && rm -rf /var/lib/apt/lists/* /tmp/chrome.deb
 COPY ./fixtures ./fixtures
 CMD ["/bin/bash", "-c", "chromedriver & cargo test -- --show-output"]
 
@@ -32,18 +28,18 @@ RUN cargo build --release
 
 FROM debian:bullseye-slim
 WORKDIR /usr/app
-RUN apt-get update \
-    && apt-get -y upgrade \
-    && apt-get install -y wget unzip cron redis-tools \
-    && mkdir /tmp/chrome \
-    && wget --no-verbose -O /tmp/chrome/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_113.0.5672.92-1_amd64.deb \
-    && apt-get install -y /tmp/chrome/chrome.deb \
-    && wget --no-verbose -O /tmp/chrome/chromedriver.zip https://chromedriver.storage.googleapis.com/113.0.5672.63/chromedriver_linux64.zip \
-    && unzip /tmp/chrome/chromedriver.zip -d /tmp/chrome \
-    && chmod +x /tmp/chrome/chromedriver \
-    && mv /tmp/chrome/chromedriver /usr/local/bin \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/chrome
+RUN apt-get update && apt-get -y upgrade && apt-get install -y \
+    cron \
+    redis-tools \
+    unzip \
+    wget
+RUN wget --no-verbose -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/113.0.5672.63/chromedriver_linux64.zip \
+    && unzip -j /tmp/chromedriver.zip 'chromedriver' -d /usr/local/bin \
+    && chmod +x /usr/local/bin/chromedriver \
+    && rm /tmp/chromedriver.zip
+RUN wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_113.0.5672.92-1_amd64.deb
+RUN apt-get install -y /tmp/chrome.deb \
+    && rm -rf /var/lib/apt/lists/* /tmp/chrome.deb
 COPY --from=build /usr/src/oshirase/aggregator/target/release/aggregator /usr/local/bin/aggregator
 COPY --from=build /usr/src/oshirase/aggregator/config/config.toml ./config/config.toml
 COPY --from=build /usr/src/oshirase/aggregator/graphql/ ./graphql/
