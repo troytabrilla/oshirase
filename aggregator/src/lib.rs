@@ -22,8 +22,7 @@ use std::error::Error;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
-// @todo Allocate data on the heap instead of the stack
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Data {
     lists: MediaLists,
     schedule: AnimeSchedule,
@@ -37,6 +36,7 @@ pub struct Sources<'a> {
 pub struct Aggregator<'a> {
     config: &'a Config,
     db: DB<'a>,
+    data: Option<Data>,
 }
 
 impl<'a> Aggregator<'a> {
@@ -44,10 +44,15 @@ impl<'a> Aggregator<'a> {
         Aggregator {
             config,
             db: DB::new(config).await,
+            data: None,
         }
     }
 
-    async fn extract(&mut self, sources: &mut Sources<'a>, id: Option<u64>) -> Result<Data> {
+    async fn extract(
+        &mut self,
+        sources: &mut Sources<'a>,
+        id: Option<u64>,
+    ) -> Result<&mut Aggregator<'a>> {
         let (lists, schedule) = tokio::join!(
             sources.anilist_api.extract(id),
             sources.subsplease_scraper.extract(id)
@@ -56,39 +61,46 @@ impl<'a> Aggregator<'a> {
         let lists = lists?;
         let schedule = schedule?;
 
-        Ok(Data { lists, schedule })
+        self.data = Some(Data { lists, schedule });
+
+        Ok(self)
     }
 
-    fn transform(&mut self, sources: Sources<'a>, mut data: Data) -> Result<Data> {
-        let anime = data
-            .lists
-            .anime
-            .par_iter_mut()
-            .map(|anime| {
-                match sources
-                    .subsplease_scraper
-                    .transform(anime, &data.schedule.0)
-                {
-                    Ok(anime) => anime,
-                    Err(err) => {
-                        eprintln!("Could not transform media: {}", err);
-                        std::mem::take(anime)
+    fn transform(&mut self, sources: Sources<'a>) -> Result<&mut Aggregator<'a>> {
+        if let Some(mut data) = self.data.as_mut() {
+            let anime = data
+                .lists
+                .anime
+                .par_iter_mut()
+                .map(|anime| {
+                    match sources
+                        .subsplease_scraper
+                        .transform(anime, &data.schedule.0)
+                    {
+                        Ok(anime) => anime,
+                        Err(err) => {
+                            eprintln!("Could not transform media: {}", err);
+                            std::mem::take(anime)
+                        }
                     }
-                }
-            })
-            .collect();
-        data.lists.anime = anime;
+                })
+                .collect();
+            data.lists.anime = anime;
+            self.data = Some(std::mem::take(data));
+        }
 
-        Ok(data)
+        Ok(self)
     }
 
-    async fn load(&self, data: &Data) -> Result<()> {
-        let anime_future = self.upsert_documents("anime", &data.lists.anime, "media_id");
-        let manga_future = self.upsert_documents("manga", &data.lists.manga, "media_id");
+    async fn load(&mut self) -> Result<&mut Aggregator<'a>> {
+        if let Some(data) = &self.data {
+            let anime_future = self.upsert_documents("anime", &data.lists.anime, "media_id");
+            let manga_future = self.upsert_documents("manga", &data.lists.manga, "media_id");
 
-        tokio::try_join!(anime_future, manga_future)?;
+            tokio::try_join!(anime_future, manga_future)?;
+        }
 
-        Ok(())
+        Ok(self)
     }
 
     pub async fn run(&mut self, id: Option<u64>) -> Result<Data> {
@@ -97,11 +109,19 @@ impl<'a> Aggregator<'a> {
             subsplease_scraper: SubsPleaseScraper::new(self.config),
         };
 
-        let data = self.extract(&mut sources, id).await?;
-        let data = self.transform(sources, data)?;
-        self.load(&data).await?;
+        let data = self
+            .extract(&mut sources, id)
+            .await?
+            .transform(sources)?
+            .load()
+            .await?
+            .data
+            .as_mut();
 
-        Ok(data)
+        match data {
+            Some(data) => Ok(std::mem::take(data)),
+            None => Err(CustomError::boxed("Could not unwrap data.")),
+        }
     }
 }
 
