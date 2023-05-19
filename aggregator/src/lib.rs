@@ -138,7 +138,7 @@ impl Persist for Aggregator<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test::helpers::{init, Fixtures, ONCE};
+    use test::helpers::{init, ONCE};
 
     use mongodb::bson::doc;
 
@@ -146,12 +146,11 @@ mod tests {
     async fn test_run() {
         ONCE.get_or_init(init).await;
         let config = Config::default();
-        let fixtures = Fixtures::default();
         let mongodb = MongoDB::new(&config).await;
         let database = mongodb.client.database("test");
 
         let mut aggregator = Aggregator::new(&config).await;
-        aggregator.run(Some(fixtures.user.id)).await.unwrap();
+        aggregator.run(None).await.unwrap();
 
         let anime: bson::Document = database
             .collection("anime")

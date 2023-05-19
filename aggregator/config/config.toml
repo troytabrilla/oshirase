@@ -1,0 +1,25 @@
+[aggregator]
+ttl = 600
+
+[anilist_api]
+url = "https://graphql.anilist.co"
+
+[db]
+
+[db.mongodb]
+uri = "mongodb://localhost:27017"
+database = "test"
+
+[db.redis]
+uri = "redis://localhost:6379"
+
+[subsplease_scraper]
+url = "https://subsplease.org/schedule/"
+webdriver_url = "http://localhost:9515"
+chrome_options = "--headless --disable-gpu"
+
+[transform]
+similarity_threshold = 0.35
+
+[worker]
+retry_timeout = 10

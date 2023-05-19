@@ -1,0 +1,1 @@
+*/10 * * * * redis-cli -h host.docker.internal LPUSH aggregator:worker:jobs run:all

@@ -24,6 +24,7 @@ RUN apt-get update \
     && mv /tmp/chrome/chromedriver /usr/local/bin \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /tmp/chrome
+COPY ./fixtures ./fixtures
 CMD ["/bin/bash", "-c", "chromedriver & cargo test -- --show-output"]
 
 FROM base as build

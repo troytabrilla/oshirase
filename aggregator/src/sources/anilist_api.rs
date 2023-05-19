@@ -252,10 +252,9 @@ mod tests {
     async fn test_extract() {
         ONCE.get_or_init(init).await;
         let config = Config::default();
-        let fixtures = Fixtures::default();
         let db = DB::new(&config).await;
         let mut api = AniListAPI::new(&config, db.mongodb.client);
-        let actual = api.extract(Some(fixtures.user.id)).await.unwrap();
+        let actual = api.extract(None).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }
