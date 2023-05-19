@@ -45,7 +45,7 @@ pub struct AnimeScheduleEntry {
     pub time: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Default, Deserialize, Serialize)]
 pub struct AnimeSchedule(pub HashMap<String, AnimeScheduleEntry>);
 
 pub struct SubsPleaseScraper<'a> {
@@ -149,9 +149,9 @@ impl Source<'_> for SubsPleaseScraper<'_> {
     type Data = AnimeSchedule;
 
     async fn extract(&mut self, _id: Option<u64>) -> Result<Self::Data> {
-        let data = self.scrape().await?;
+        let mut data = self.scrape().await?;
 
-        Ok(data)
+        Ok(std::mem::take(&mut data))
     }
 }
 
@@ -190,7 +190,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_transform() {
-        let media = [
+        let mut media = [
             Media {
                 media_id: Some(1),
                 status: Some("CURRENT".to_owned()),
@@ -271,17 +271,17 @@ mod tests {
         let subsplease_scraper = SubsPleaseScraper::new(&config);
 
         let transformed = subsplease_scraper
-            .transform(media[0].clone(), &schedules)
+            .transform(&mut media[0], &schedules)
             .unwrap();
         assert_eq!(transformed.schedule, schedules.get("gintama").cloned());
 
         let transformed = subsplease_scraper
-            .transform(media[1].clone(), &schedules)
+            .transform(&mut media[1], &schedules)
             .unwrap();
         assert_eq!(transformed.schedule, schedules.get("naruto").cloned());
 
         let transformed = subsplease_scraper
-            .transform(media[2].clone(), &schedules)
+            .transform(&mut media[2], &schedules)
             .unwrap();
         assert_eq!(
             transformed.schedule,

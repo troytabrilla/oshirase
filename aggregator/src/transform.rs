@@ -10,7 +10,7 @@ pub trait Transform {
 
     fn set_media(media: &mut Media, extra: Option<Self::Extra>);
 
-    fn transform(&self, mut media: Media, extra: &HashMap<String, Self::Extra>) -> Result<Media> {
+    fn transform(&self, media: &mut Media, extra: &HashMap<String, Self::Extra>) -> Result<Media> {
         if media.status == Some("CURRENT".to_string()) {
             let title = match media.title.to_owned() {
                 Some(title) => title,
@@ -23,13 +23,13 @@ pub trait Transform {
             };
 
             if extra.contains_key(&title) {
-                Self::set_media(&mut media, extra.get(&title).cloned());
-                return Ok(media);
+                Self::set_media(media, extra.get(&title).cloned());
+                return Ok(std::mem::take(media));
             }
 
             if extra.contains_key(&alt_title) {
-                Self::set_media(&mut media, extra.get(&alt_title).cloned());
-                return Ok(media);
+                Self::set_media(media, extra.get(&alt_title).cloned());
+                return Ok(std::mem::take(media));
             }
 
             let mut score_tuple: (f64, Option<&Self::Extra>) = (-f64::INFINITY, None);
@@ -45,10 +45,10 @@ pub trait Transform {
             }
 
             if score_tuple.1.is_some() {
-                Self::set_media(&mut media, score_tuple.1.cloned());
+                Self::set_media(media, score_tuple.1.cloned());
             }
         }
 
-        Ok(media)
+        Ok(std::mem::take(media))
     }
 }

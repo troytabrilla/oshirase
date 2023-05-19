@@ -7,12 +7,13 @@ use crate::Result;
 
 use async_trait::async_trait;
 use bson::doc;
+use futures::TryStreamExt;
 use graphql_client::GraphQLQuery;
 use serde::{Deserialize, Serialize};
 
 type Json = serde_json::Value;
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Hash)]
 pub struct User {
     pub id: u64,
     pub name: String,
@@ -20,7 +21,7 @@ pub struct User {
 
 impl Document for User {}
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Hash)]
 pub struct Media {
     pub media_id: Option<u64>,
     pub media_type: Option<String>,
@@ -40,10 +41,17 @@ pub struct Media {
 
 impl Document for Media {}
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize)]
 pub struct MediaLists {
     pub anime: Vec<Media>,
     pub manga: Vec<Media>,
+}
+
+impl MediaLists {
+    fn append(&mut self, other: &mut MediaLists) {
+        self.anime.append(&mut other.anime);
+        self.manga.append(&mut other.manga);
+    }
 }
 
 #[derive(GraphQLQuery)]
@@ -97,22 +105,23 @@ impl AniListAPI<'_> {
         Ok(json)
     }
 
-    pub async fn fetch_user(&self, id: Option<u64>) -> Result<User> {
+    pub async fn fetch_user_or_default(&self, id: Option<u64>) -> Result<Vec<User>> {
         let filter = match id {
             Some(id) => {
                 doc! { "id": id as i64 }
             }
             None => doc! {},
         };
-        // @todo For now, just fetch one user, eventually want to process all users
-        let user: Option<User> = self
+        let users: Vec<User> = self
             .mongodb
             .database(&self.config.db.mongodb.database)
             .collection("users")
-            .find_one(filter, None)
+            .find(filter, None)
+            .await?
+            .try_collect()
             .await?;
 
-        user.ok_or(CustomError::boxed("Could not find user."))
+        Ok(users)
     }
 
     fn transform(&self, json: Option<&Vec<Json>>) -> Result<Vec<Media>> {
@@ -197,10 +206,22 @@ impl Source<'_> for AniListAPI<'_> {
     type Data = MediaLists;
 
     async fn extract(&mut self, id: Option<u64>) -> Result<Self::Data> {
-        let user = self.fetch_user(id).await?;
-        let data = self.fetch_lists(user.id).await?;
+        let mut data = Vec::new();
 
-        Ok(data)
+        let users = self.fetch_user_or_default(id).await?;
+        for user in users {
+            data.push(self.fetch_lists(user.id).await?);
+        }
+
+        let data = data
+            .iter_mut()
+            .reduce(|acc, d| {
+                acc.append(d);
+                acc
+            })
+            .ok_or(CustomError::boxed("Could not reduce lists."))?;
+
+        Ok(std::mem::take(data))
     }
 }
 
@@ -218,8 +239,11 @@ mod tests {
         let fixtures = Fixtures::default();
         let db = DB::new(&config).await;
         let api = AniListAPI::new(&config, db.mongodb.client);
-        let user = api.fetch_user(Some(fixtures.user.id)).await.unwrap();
-        let actual = api.fetch_lists(user.id).await.unwrap();
+        let users = api
+            .fetch_user_or_default(Some(fixtures.user.id))
+            .await
+            .unwrap();
+        let actual = api.fetch_lists(users[0].id).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }

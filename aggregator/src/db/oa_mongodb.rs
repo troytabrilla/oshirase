@@ -53,7 +53,7 @@ pub trait Persist {
         let index_options = IndexOptions::builder().unique(true).build();
         let index = IndexModel::builder()
             .keys(doc! { format!("{}", key): 1 })
-            .options(index_options.clone())
+            .options(index_options)
             .build();
         collection.create_index(index, None).await?;
 

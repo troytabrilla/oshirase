@@ -63,16 +63,16 @@ impl<'a> Aggregator<'a> {
         let anime = data
             .lists
             .anime
-            .par_iter()
+            .par_iter_mut()
             .map(|anime| {
                 match sources
                     .subsplease_scraper
-                    .transform(anime.clone(), &data.schedule.0)
+                    .transform(anime, &data.schedule.0)
                 {
                     Ok(anime) => anime,
                     Err(err) => {
                         eprintln!("Could not transform media: {}", err);
-                        anime.clone()
+                        std::mem::take(anime)
                     }
                 }
             })
