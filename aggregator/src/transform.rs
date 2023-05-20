@@ -16,10 +16,14 @@ pub trait Transform {
                 Some(title) => title,
                 None => String::new(),
             };
-            // @todo Add support for user-provided alt titles (new source)
-            let alt_title = match media.alt_title.to_owned() {
-                Some(alt_title) => alt_title,
+            let english_title = match media.english_title.to_owned() {
+                Some(english_title) => english_title,
                 None => String::new(),
+            };
+            let empty_vec = Vec::new();
+            let alt_titles = match &media.alt_titles {
+                Some(alt_titles) => &alt_titles.alt_titles,
+                None => &empty_vec,
             };
 
             if extra.contains_key(&title) {
@@ -27,15 +31,24 @@ pub trait Transform {
                 return Ok(std::mem::take(media));
             }
 
-            if extra.contains_key(&alt_title) {
-                Self::set_media(media, extra.get(&alt_title).cloned());
+            if extra.contains_key(&english_title) {
+                Self::set_media(media, extra.get(&english_title).cloned());
                 return Ok(std::mem::take(media));
+            }
+
+            for alt_title in alt_titles {
+                println!("Alt Title {}", alt_title);
+                if extra.contains_key(alt_title) {
+                    println!("Match!");
+                    Self::set_media(media, extra.get(alt_title).cloned());
+                    return Ok(std::mem::take(media));
+                }
             }
 
             let mut score_tuple: (f64, Option<&Self::Extra>) = (-f64::INFINITY, None);
             for (ex_title, ex) in extra {
                 let score = strsim::normalized_levenshtein(&title, ex_title);
-                let alt_score = strsim::normalized_levenshtein(&alt_title, ex_title);
+                let alt_score = strsim::normalized_levenshtein(&english_title, ex_title);
                 if score > self.get_similarity_threshold() && score > score_tuple.0 {
                     score_tuple = (score, Some(ex));
                 }

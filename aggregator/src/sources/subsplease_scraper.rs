@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::error::CustomError;
-use crate::sources::Source;
+use crate::sources::{ExtractOptions, Source};
 use crate::transform::Transform;
 use crate::Media;
 use crate::Result;
@@ -148,7 +148,7 @@ impl SubsPleaseScraper<'_> {
 impl Source<'_> for SubsPleaseScraper<'_> {
     type Data = AnimeSchedule;
 
-    async fn extract(&mut self, _id: Option<u64>) -> Result<Self::Data> {
+    async fn extract(&mut self, _options: Option<&ExtractOptions>) -> Result<Self::Data> {
         let mut data = self.scrape().await?;
 
         Ok(std::mem::take(&mut data))
@@ -195,7 +195,7 @@ mod tests {
                 media_id: Some(1),
                 status: Some("CURRENT".to_owned()),
                 title: Some("Gintama".to_owned()),
-                alt_title: Some("Gin Tama".to_owned()),
+                english_title: Some("Gin Tama".to_owned()),
                 media_type: None,
                 format: None,
                 season: None,
@@ -206,12 +206,13 @@ mod tests {
                 progress: None,
                 latest: None,
                 schedule: None,
+                alt_titles: None,
             },
             Media {
                 media_id: Some(1),
                 status: Some("CURRENT".to_owned()),
                 title: Some("naruto".to_owned()),
-                alt_title: None,
+                english_title: None,
                 media_type: None,
                 format: None,
                 season: None,
@@ -222,12 +223,13 @@ mod tests {
                 progress: None,
                 latest: None,
                 schedule: None,
+                alt_titles: None,
             },
             Media {
                 media_id: Some(1),
                 status: Some("CURRENT".to_owned()),
                 title: None,
-                alt_title: Some("tamako market".to_owned()),
+                english_title: Some("tamako market".to_owned()),
                 media_type: None,
                 format: None,
                 season: None,
@@ -238,6 +240,7 @@ mod tests {
                 progress: None,
                 latest: None,
                 schedule: None,
+                alt_titles: None,
             },
         ];
         let schedules = HashMap::from([

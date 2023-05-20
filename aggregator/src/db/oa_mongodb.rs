@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::db::Document;
+use crate::AltTitlesEntry;
 use crate::CustomError;
 use crate::Media;
 use crate::Result;
@@ -36,13 +37,16 @@ impl MongoDB<'_> {
         let anime_hash_future = mongodb.create_unique_index::<Media>("anime", "hash");
         let manga_hash_future = mongodb.create_unique_index::<Media>("manga", "hash");
         let user_future = mongodb.create_unique_index::<User>("users", "id");
+        let alt_title_future =
+            mongodb.create_unique_index::<AltTitlesEntry>("alt_titles", "media_id");
 
         tokio::try_join!(
             anime_media_id_future,
             anime_hash_future,
             manga_media_id_future,
             manga_hash_future,
-            user_future
+            user_future,
+            alt_title_future
         )
         .unwrap();
 

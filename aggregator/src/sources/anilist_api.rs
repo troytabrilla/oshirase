@@ -1,7 +1,8 @@
+use crate::alt_titles_db::AltTitlesEntry;
 use crate::config::Config;
 use crate::db::Document;
 use crate::error::CustomError;
-use crate::sources::Source;
+use crate::sources::{ExtractOptions, Source};
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::Result;
 
@@ -22,6 +23,12 @@ pub struct User {
 impl Document for User {}
 
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize, Hash)]
+pub struct Latest {
+    pub episode: Option<u64>,
+    pub url: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Hash)]
 pub struct Media {
     pub media_id: Option<u64>,
     pub media_type: Option<String>,
@@ -30,13 +37,14 @@ pub struct Media {
     pub season: Option<String>,
     pub season_year: Option<u64>,
     pub title: Option<String>,
-    pub alt_title: Option<String>,
+    pub english_title: Option<String>,
     pub image: Option<String>,
     pub episodes: Option<u64>,
     pub score: Option<u64>,
     pub progress: Option<u64>,
-    pub latest: Option<u64>,
     pub schedule: Option<AnimeScheduleEntry>,
+    pub latest: Option<Latest>,
+    pub alt_titles: Option<AltTitlesEntry>,
 }
 
 impl Document for Media {}
@@ -105,10 +113,10 @@ impl AniListAPI<'_> {
         Ok(json)
     }
 
-    pub async fn fetch_user_or_default(&self, id: Option<u64>) -> Result<Vec<User>> {
-        let filter = match id {
-            Some(id) => {
-                doc! { "id": id as i64 }
+    pub async fn fetch_user_or_default(&self, user_id: Option<u64>) -> Result<Vec<User>> {
+        let filter = match user_id {
+            Some(user_id) => {
+                doc! { "id": user_id as i64 }
             }
             None => doc! {},
         };
@@ -145,7 +153,7 @@ impl AniListAPI<'_> {
                                         entry,
                                         "/media/title/romaji",
                                     ),
-                                    alt_title: Self::extract_value_as_string(
+                                    english_title: Self::extract_value_as_string(
                                         entry,
                                         "/media/title/english",
                                     ),
@@ -158,6 +166,7 @@ impl AniListAPI<'_> {
                                     progress: Self::extract_value_as_u64(entry, "/progress"),
                                     latest: None,
                                     schedule: None,
+                                    alt_titles: None,
                                 };
 
                                 acc.push(media);
@@ -205,10 +214,15 @@ impl AniListAPI<'_> {
 impl Source<'_> for AniListAPI<'_> {
     type Data = MediaLists;
 
-    async fn extract(&mut self, id: Option<u64>) -> Result<Self::Data> {
+    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
         let mut data = Vec::new();
 
-        let users = self.fetch_user_or_default(id).await?;
+        let user_id = match options {
+            Some(options) => options.user_id,
+            None => None,
+        };
+
+        let users = self.fetch_user_or_default(user_id).await?;
         for user in users {
             data.push(self.fetch_lists(user.id).await?);
         }

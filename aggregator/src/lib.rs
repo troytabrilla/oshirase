@@ -10,6 +10,7 @@ pub use config::Config;
 pub use error::CustomError;
 pub use worker::Worker;
 
+use alt_titles_db::*;
 use anilist_api::*;
 use db::*;
 use sources::*;
@@ -26,11 +27,14 @@ pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 pub struct Data {
     lists: MediaLists,
     schedule: AnimeSchedule,
+    alt_titles: AltTitles,
 }
 
+// @todo Sources should be a list of Source enums, extract and transform should iterate through sources
 pub struct Sources<'a> {
     anilist_api: AniListAPI<'a>,
     subsplease_scraper: SubsPleaseScraper<'a>,
+    alt_titles_db: AltTitlesDB<'a>,
 }
 
 pub struct Aggregator<'a> {
@@ -51,17 +55,23 @@ impl<'a> Aggregator<'a> {
     async fn extract(
         &mut self,
         sources: &mut Sources<'a>,
-        id: Option<u64>,
+        options: Option<&ExtractOptions>,
     ) -> Result<&mut Aggregator<'a>> {
-        let (lists, schedule) = tokio::join!(
-            sources.anilist_api.extract(id),
-            sources.subsplease_scraper.extract(id)
+        let (lists, schedule, alt_titles) = tokio::join!(
+            sources.anilist_api.extract(options),
+            sources.subsplease_scraper.extract(options),
+            sources.alt_titles_db.extract(options),
         );
 
         let lists = lists?;
         let schedule = schedule?;
+        let alt_titles = alt_titles?;
 
-        self.data = Some(Data { lists, schedule });
+        self.data = Some(Data {
+            lists,
+            schedule,
+            alt_titles,
+        });
 
         Ok(self)
     }
@@ -73,17 +83,32 @@ impl<'a> Aggregator<'a> {
                 .anime
                 .par_iter_mut()
                 .map(|anime| {
-                    match sources
+                    let mut transformed =
+                        match sources.alt_titles_db.transform(anime, &data.alt_titles.0) {
+                            Ok(anime) => anime,
+                            Err(err) => {
+                                eprintln!("Could not transform media with alt titles: {}", err);
+                                std::mem::take(anime)
+                            }
+                        };
+                    *anime = std::mem::take(&mut transformed);
+                    anime
+                })
+                .map(|anime| {
+                    let mut transformed = match sources
                         .subsplease_scraper
                         .transform(anime, &data.schedule.0)
                     {
                         Ok(anime) => anime,
                         Err(err) => {
-                            eprintln!("Could not transform media: {}", err);
+                            eprintln!("Could not transform media with schedule: {}", err);
                             std::mem::take(anime)
                         }
-                    }
+                    };
+                    *anime = std::mem::take(&mut transformed);
+                    anime
                 })
+                .map(std::mem::take)
                 .collect();
             data.lists.anime = anime;
             self.data = Some(std::mem::take(data));
@@ -103,14 +128,17 @@ impl<'a> Aggregator<'a> {
         Ok(self)
     }
 
-    pub async fn run(&mut self, id: Option<u64>) -> Result<Data> {
+    pub async fn run(&mut self, user_id: Option<u64>) -> Result<Data> {
         let mut sources = Sources {
             anilist_api: AniListAPI::new(self.config, self.db.mongodb.client.clone()),
             subsplease_scraper: SubsPleaseScraper::new(self.config),
+            alt_titles_db: AltTitlesDB::new(self.config, self.db.mongodb.client.clone()),
         };
 
+        let extract_options = ExtractOptions { user_id };
+
         let data = self
-            .extract(&mut sources, id)
+            .extract(&mut sources, Some(&extract_options))
             .await?
             .transform(sources)?
             .load()
