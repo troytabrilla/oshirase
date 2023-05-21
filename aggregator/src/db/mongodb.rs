@@ -6,13 +6,13 @@ use crate::Media;
 use crate::Result;
 use crate::User;
 
-use futures::future::try_join_all;
 use mongodb::{
     bson::doc,
     options::{ClientOptions, FindOneAndUpdateOptions, IndexOptions},
     IndexModel,
 };
 use std::{collections::hash_map::DefaultHasher, hash::Hasher};
+use tokio::task::JoinSet;
 
 pub struct MongoDB<'a> {
     pub client: mongodb::Client,
@@ -80,10 +80,7 @@ impl MongoDB<'_> {
     where
         T: Document,
     {
-        let database = self.client.database(&self.config.db.mongodb.database);
-        let collection = database.collection::<T>(collection);
-
-        let mut futures = Vec::new();
+        let mut futures = JoinSet::new();
 
         for document in documents {
             let hash = Self::hash_document(document);
@@ -95,14 +92,28 @@ impl MongoDB<'_> {
                 .get(id_key)
                 .ok_or(CustomError::boxed(&format!("Could not find {}.", id_key)))?;
 
-            futures.push(collection.find_one_and_update(
-                doc! { format!("{}", id_key): id },
-                doc! { "$set": document },
-                FindOneAndUpdateOptions::builder().upsert(true).build(),
-            ));
+            let collection = self
+                .client
+                .clone()
+                .database(&self.config.db.mongodb.database)
+                .collection::<bson::Document>(collection);
+            let filter = doc! { format!("{}", id_key): id };
+            let update = doc! { "$set": document };
+
+            futures.spawn(async move {
+                collection
+                    .find_one_and_update(
+                        filter,
+                        update,
+                        FindOneAndUpdateOptions::builder().upsert(true).build(),
+                    )
+                    .await
+            });
         }
 
-        try_join_all(futures).await?;
+        while let Some(future) = futures.join_next().await {
+            future??;
+        }
 
         Ok(())
     }
