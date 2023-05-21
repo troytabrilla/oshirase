@@ -16,7 +16,6 @@ use subsplease_scraper::*;
 
 pub use config::Config;
 pub use error::CustomError;
-pub use options::RunOptions;
 pub use result::Result;
 pub use worker::Worker;
 
@@ -112,23 +111,16 @@ impl<'a> Aggregator<'a> {
         Ok(data)
     }
 
-    pub async fn run(&self, options: Option<RunOptions>) -> Result<Data> {
+    pub async fn run(&self) -> Result<Data> {
         let sources = Sources {
             anilist_api: AniListAPI::new(self.config),
             subsplease_scraper: SubsPleaseScraper::new(self.config),
             alt_titles_db: AltTitlesDB::new(self.config),
         };
 
-        // @todo Don't take user id's, just let anilist_api extract grab them from the db.
-        let user_id = match options {
-            Some(options) => options.user_id,
-            None => None,
-        };
-
         let mongodb = MongoDB::init(self.config).await;
 
         let extract_options = ExtractOptions {
-            user_id,
             mongodb_client: Some(mongodb.client.clone()),
         };
 
@@ -155,7 +147,7 @@ mod tests {
         let config = Config::default();
         let mongodb = MongoDB::new(&config).await;
         let aggregator = Aggregator::new(&config);
-        aggregator.run(None).await.unwrap();
+        aggregator.run().await.unwrap();
 
         let database = mongodb.client.database(&config.db.mongodb.database);
 

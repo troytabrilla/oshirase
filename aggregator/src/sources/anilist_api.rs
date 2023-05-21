@@ -112,21 +112,11 @@ impl AniListAPI<'_> {
         Ok(json)
     }
 
-    pub async fn fetch_user_or_default(
-        &self,
-        user_id: Option<u64>,
-        mongodb_client: mongodb::Client,
-    ) -> Result<Vec<User>> {
-        let filter = match user_id {
-            Some(user_id) => {
-                doc! { "id": user_id as i64 }
-            }
-            None => doc! {},
-        };
+    pub async fn fetch_users(&self, mongodb_client: mongodb::Client) -> Result<Vec<User>> {
         let users: Vec<User> = mongodb_client
             .database(&self.config.db.mongodb.database)
             .collection("users")
-            .find(filter, None)
+            .find(None, None)
             .await?
             .try_collect()
             .await?;
@@ -219,11 +209,6 @@ impl Extract<'_> for AniListAPI<'_> {
     async fn extract(&self, options: Option<ExtractOptions>) -> Result<Self::Data> {
         let mut data = Vec::new();
 
-        let user_id = match &options {
-            Some(options) => options.user_id,
-            None => None,
-        };
-
         let mongodb_client = match options {
             Some(options) => match options.mongodb_client {
                 Some(mongodb_client) => mongodb_client,
@@ -232,7 +217,7 @@ impl Extract<'_> for AniListAPI<'_> {
             None => return Err(CustomError::boxed("No options provided.")),
         };
 
-        let users = self.fetch_user_or_default(user_id, mongodb_client).await?;
+        let users = self.fetch_users(mongodb_client).await?;
         for user in users {
             data.push(self.fetch_lists(user.id).await?);
         }
@@ -254,7 +239,7 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::db::MongoDB;
-    use crate::test::helpers::{init, reset_db, Fixtures, ONCE};
+    use crate::test::helpers::{init, reset_db, ONCE};
 
     #[tokio::test]
     async fn test_fetch_lists() {
@@ -262,13 +247,9 @@ mod tests {
         reset_db().await;
 
         let config = Config::default();
-        let fixtures = Fixtures::default();
         let mongodb = MongoDB::new(&config).await;
         let api = AniListAPI::new(&config);
-        let users = api
-            .fetch_user_or_default(Some(fixtures.user.id), mongodb.client)
-            .await
-            .unwrap();
+        let users = api.fetch_users(mongodb.client).await.unwrap();
         let actual = api.fetch_lists(users[0].id).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
@@ -283,7 +264,6 @@ mod tests {
         let mongodb = MongoDB::new(&config).await;
         let api = AniListAPI::new(&config);
         let options = ExtractOptions {
-            user_id: None,
             mongodb_client: Some(mongodb.client),
         };
         let actual = api.extract(Some(options)).await.unwrap();

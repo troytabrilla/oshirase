@@ -52,7 +52,7 @@ impl<'a> Worker<'a> {
                                         OffsetDateTime::now_utc()
                                     );
                                     let start = std::time::Instant::now();
-                                    match self.aggregator.run(None).await {
+                                    match self.aggregator.run().await {
                                         Ok(_) => println!(
                                             "Finished running aggregator: {:?}.",
                                             start.elapsed()

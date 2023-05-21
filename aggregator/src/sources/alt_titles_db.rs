@@ -120,7 +120,6 @@ mod tests {
 
         let alt_titles_db = AltTitlesDB::new(&config);
         let options = ExtractOptions {
-            user_id: None,
             mongodb_client: Some(mongodb.client.clone()),
         };
         let actual = alt_titles_db.extract(Some(options)).await.unwrap();

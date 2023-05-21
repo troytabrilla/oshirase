@@ -1,7 +1,6 @@
 use aggregator::Aggregator;
 use aggregator::Config;
 use aggregator::Result;
-use aggregator::RunOptions;
 use aggregator::Worker;
 
 use clap::Parser;
@@ -17,9 +16,6 @@ struct Cli {
 
     #[arg(short, long, help = "Print results")]
     print: bool,
-
-    #[arg(short, long, help = "AniList user ID")]
-    user_id: Option<u64>,
 
     #[arg(short, long, help = "Run in worker mode")]
     worker_mode: bool,
@@ -40,10 +36,7 @@ async fn main() -> Result<()> {
         let worker = Worker::new(&aggregator);
         worker.run().await;
     } else {
-        let options = RunOptions {
-            user_id: cli.user_id,
-        };
-        let data = aggregator.run(Some(options)).await?;
+        let data = aggregator.run().await?;
 
         if cli.print {
             println!("{:?}", data);
