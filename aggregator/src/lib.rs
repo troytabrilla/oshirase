@@ -150,13 +150,15 @@ impl<'a> Aggregator<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use test::helpers::{init, ONCE};
+    use test::helpers::{init, reset_db, ONCE};
 
     use mongodb::bson::doc;
 
     #[tokio::test]
     async fn test_run() {
         ONCE.get_or_init(init).await;
+        reset_db().await;
+
         let config = Config::default();
         let mongodb = MongoDB::new(&config).await;
         let aggregator = Aggregator::new(&config).await;

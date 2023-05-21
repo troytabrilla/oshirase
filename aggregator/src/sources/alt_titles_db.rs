@@ -96,13 +96,14 @@ mod tests {
     use super::*;
     use crate::config::Config;
     use crate::db::MongoDB;
-    use crate::test::helpers::{init, ONCE};
+    use crate::test::helpers::{init, reset_db, ONCE};
 
     use bson::doc;
 
     #[tokio::test]
     async fn test_extract() {
         ONCE.get_or_init(init).await;
+        reset_db().await;
 
         let config = Config::default();
         let mongodb = MongoDB::new(&config).await;

@@ -54,4 +54,18 @@ pub mod helpers {
             .await
             .unwrap();
     }
+
+    pub async fn reset_db() {
+        let config = Config::default();
+        let mongodb = MongoDB::init(&config).await;
+        let database = mongodb.client.database(&config.db.mongodb.database);
+        database.collection::<()>("anime").drop(None).await.unwrap();
+        database.collection::<()>("manga").drop(None).await.unwrap();
+        database
+            .collection::<()>("alt_titles")
+            .drop(None)
+            .await
+            .unwrap();
+        database.collection::<()>("test").drop(None).await.unwrap();
+    }
 }

@@ -25,7 +25,9 @@ mod tests {
         let redis = Redis::new(&config);
         let mut connection = redis.client.get_connection().unwrap();
         let expected = "test";
-        connection.set::<&str, &str, ()>("test", expected).unwrap();
+        connection
+            .set_ex::<&str, &str, ()>("test", expected, 5)
+            .unwrap();
         let actual: String = connection.get("test").unwrap();
         assert_eq!(expected, actual);
     }

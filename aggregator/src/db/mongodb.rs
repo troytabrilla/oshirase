@@ -111,7 +111,9 @@ impl MongoDB<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test::helpers::{init, reset_db, ONCE};
     use crate::Config;
+
     use futures::TryStreamExt;
     use serde::{Deserialize, Serialize};
 
@@ -124,13 +126,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_mongodb_upsert_documents() {
+        ONCE.get_or_init(init).await;
+        reset_db().await;
+
         let config = Config::default();
         let mongo = MongoDB::init(&config).await;
         let collection = mongo
             .client
-            .database(&mongo.config.db.mongodb.database)
-            .collection::<Test>("test");
-        collection.drop(None).await.unwrap();
+            .database(&config.db.mongodb.database)
+            .collection("test");
 
         mongo
             .upsert_documents(
