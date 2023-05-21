@@ -1,12 +1,11 @@
 use crate::config::Config;
-use crate::db::Document;
+use crate::sources::Document;
 use crate::AltTitlesEntry;
 use crate::CustomError;
 use crate::Media;
 use crate::Result;
 use crate::User;
 
-use async_trait::async_trait;
 use futures::future::try_join_all;
 use mongodb::{
     bson::doc,
@@ -32,21 +31,13 @@ impl MongoDB<'_> {
     pub async fn init(config: &Config) -> MongoDB {
         let mongodb = MongoDB::new(config).await;
 
-        let anime_media_id_future = mongodb.create_unique_index::<Media>("anime", "media_id");
-        let manga_media_id_future = mongodb.create_unique_index::<Media>("manga", "media_id");
-        let anime_hash_future = mongodb.create_unique_index::<Media>("anime", "hash");
-        let manga_hash_future = mongodb.create_unique_index::<Media>("manga", "hash");
-        let user_future = mongodb.create_unique_index::<User>("users", "id");
-        let alt_title_future =
-            mongodb.create_unique_index::<AltTitlesEntry>("alt_titles", "media_id");
-
         tokio::try_join!(
-            anime_media_id_future,
-            anime_hash_future,
-            manga_media_id_future,
-            manga_hash_future,
-            user_future,
-            alt_title_future
+            mongodb.create_unique_index::<Media>("anime", "media_id"),
+            mongodb.create_unique_index::<Media>("manga", "media_id"),
+            mongodb.create_unique_index::<Media>("anime", "hash"),
+            mongodb.create_unique_index::<Media>("manga", "hash"),
+            mongodb.create_unique_index::<User>("users", "id"),
+            mongodb.create_unique_index::<AltTitlesEntry>("alt_titles", "media_id"),
         )
         .unwrap();
 
@@ -69,15 +60,8 @@ impl MongoDB<'_> {
 
         Ok(())
     }
-}
 
-#[async_trait]
-pub trait Persist {
-    fn get_client(&self) -> &mongodb::Client;
-
-    fn get_database(&self) -> &str;
-
-    fn hash_document<T>(document: &T) -> String
+    pub fn hash_document<T>(document: &T) -> String
     where
         T: Document,
     {
@@ -87,7 +71,7 @@ pub trait Persist {
         format!("{:x}", hash)
     }
 
-    async fn upsert_documents<T>(
+    pub async fn upsert_documents<T>(
         &self,
         collection: &str,
         documents: &[T],
@@ -96,7 +80,7 @@ pub trait Persist {
     where
         T: Document,
     {
-        let database = self.get_client().database(self.get_database());
+        let database = self.client.database(&self.config.db.mongodb.database);
         let collection = database.collection::<T>(collection);
 
         let mut futures = Vec::new();
@@ -138,19 +122,6 @@ mod tests {
     }
     impl Document for Test {}
 
-    struct Persister {
-        client: mongodb::Client,
-    }
-    impl Persist for Persister {
-        fn get_client(&self) -> &mongodb::Client {
-            &self.client
-        }
-
-        fn get_database(&self) -> &str {
-            "test"
-        }
-    }
-
     #[tokio::test]
     async fn test_mongodb_upsert_documents() {
         let config = Config::default();
@@ -161,11 +132,7 @@ mod tests {
             .collection::<Test>("test");
         collection.drop(None).await.unwrap();
 
-        let persister = Persister {
-            client: mongo.client,
-        };
-
-        persister
+        mongo
             .upsert_documents(
                 "test",
                 &[Test {
@@ -184,7 +151,7 @@ mod tests {
         assert_eq!(docs.len(), 1);
         assert_eq!(docs[0].extra, 21);
 
-        persister
+        mongo
             .upsert_documents(
                 "test",
                 &[Test {

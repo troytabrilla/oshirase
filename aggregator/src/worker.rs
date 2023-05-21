@@ -1,3 +1,4 @@
+use crate::db::Redis;
 use crate::Aggregator;
 
 use redis::Commands;
@@ -6,11 +7,11 @@ use time::OffsetDateTime;
 const DEFAULT_RETRY_TIMEOUT: u64 = 10;
 
 pub struct Worker<'a> {
-    aggregator: &'a mut Aggregator<'a>,
+    aggregator: &'a Aggregator<'a>,
 }
 
 impl<'a> Worker<'a> {
-    pub fn new(aggregator: &'a mut Aggregator<'a>) -> Worker<'a> {
+    pub fn new(aggregator: &'a Aggregator<'a>) -> Worker<'a> {
         Worker { aggregator }
     }
 
@@ -27,10 +28,11 @@ impl<'a> Worker<'a> {
         std::time::Duration::from_secs(retry_timeout)
     }
 
-    pub async fn run(&mut self) {
+    pub async fn run(&self) {
         let retry_timeout = self.aggregator.config.worker.retry_timeout;
+        let redis = Redis::new(self.aggregator.config);
+        let client = redis.client;
 
-        let client = &self.aggregator.db.redis.client.clone();
         loop {
             let connection = client.get_connection_with_timeout(self.get_retry_timeout_duration());
             match connection {

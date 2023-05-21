@@ -1,8 +1,8 @@
 use crate::anilist_api::Media;
 use crate::config::Config;
-use crate::db::Document;
-use crate::sources::{ExtractOptions, Source};
-use crate::transform::Transform;
+use crate::error::CustomError;
+use crate::sources::Document;
+use crate::sources::{Extract, ExtractOptions, Transform};
 use crate::Result;
 
 use async_trait::async_trait;
@@ -23,22 +23,27 @@ pub struct AltTitles(pub HashMap<String, AltTitlesEntry>);
 
 pub struct AltTitlesDB<'a> {
     config: &'a Config,
-    mongodb: mongodb::Client,
 }
 
 impl AltTitlesDB<'_> {
-    pub fn new(config: &Config, mongodb: mongodb::Client) -> AltTitlesDB {
-        AltTitlesDB { config, mongodb }
+    pub fn new(config: &Config) -> AltTitlesDB {
+        AltTitlesDB { config }
     }
 }
 
 #[async_trait]
-impl Source<'_> for AltTitlesDB<'_> {
+impl Extract<'_> for AltTitlesDB<'_> {
     type Data = AltTitles;
 
-    async fn extract(&mut self, _options: Option<&ExtractOptions>) -> Result<Self::Data> {
-        let collection = self
-            .mongodb
+    async fn extract(&self, options: Option<ExtractOptions>) -> Result<Self::Data> {
+        let mongodb_client = match options {
+            Some(options) => match options.mongodb_client {
+                Some(mongodb_client) => mongodb_client,
+                None => return Err(CustomError::boxed("No mongodb client provided.")),
+            },
+            None => return Err(CustomError::boxed("No options provided.")),
+        };
+        let collection = mongodb_client
             .database(&self.config.db.mongodb.database)
             .collection::<AltTitlesEntry>("alt_titles");
 
@@ -65,10 +70,6 @@ impl Source<'_> for AltTitlesDB<'_> {
 impl Transform for AltTitlesDB<'_> {
     type Extra = AltTitlesEntry;
 
-    fn get_similarity_threshold(&self) -> f64 {
-        1.0
-    }
-
     fn set_media(media: &mut Media, extra: Option<Self::Extra>) {
         media.alt_titles = extra;
     }
@@ -94,7 +95,7 @@ impl Transform for AltTitlesDB<'_> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::db::DB;
+    use crate::db::MongoDB;
     use crate::test::helpers::{init, ONCE};
 
     use bson::doc;
@@ -104,10 +105,10 @@ mod tests {
         ONCE.get_or_init(init).await;
 
         let config = Config::default();
-        let db = DB::new(&config).await;
+        let mongodb = MongoDB::new(&config).await;
 
-        let client = db.mongodb.client;
-        let collection = client
+        let collection = mongodb
+            .client
             .database(&config.db.mongodb.database)
             .collection("alt_titles");
         let expected = vec!["alt", "title"];
@@ -116,8 +117,12 @@ mod tests {
             .await
             .unwrap();
 
-        let mut alt_titles_db = AltTitlesDB::new(&config, client);
-        let actual = alt_titles_db.extract(None).await.unwrap();
+        let alt_titles_db = AltTitlesDB::new(&config);
+        let options = ExtractOptions {
+            user_id: None,
+            mongodb_client: Some(mongodb.client.clone()),
+        };
+        let actual = alt_titles_db.extract(Some(options)).await.unwrap();
 
         println!("{:#?}", actual);
         assert_eq!(actual.0.len(), 1);
@@ -153,8 +158,7 @@ mod tests {
         )]);
 
         let config = Config::default();
-        let db = DB::new(&config).await;
-        let alt_title_db = AltTitlesDB::new(&config, db.mongodb.client);
+        let alt_title_db = AltTitlesDB::new(&config);
 
         let transformed = alt_title_db.transform(&mut media[0], &alt_titles).unwrap();
         assert_eq!(transformed.alt_titles, alt_titles.get("1").cloned());

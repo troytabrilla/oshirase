@@ -1,6 +1,6 @@
 #[cfg(test)]
 pub mod helpers {
-    use crate::db::{Persist, DB};
+    use crate::db::{MongoDB, Redis};
     use crate::Config;
     use crate::User;
 
@@ -30,36 +30,16 @@ pub mod helpers {
         }
     }
 
-    struct Initializer<'a> {
-        db: &'a DB<'a>,
-        config: &'a Config,
-    }
-
-    impl Persist for Initializer<'_> {
-        fn get_client(&self) -> &mongodb::Client {
-            &self.db.mongodb.client
-        }
-
-        fn get_database(&self) -> &str {
-            self.config.db.mongodb.database.as_str()
-        }
-    }
-
     pub async fn init() {
         let config = Config::default();
-        let db = DB::new(&config).await;
+        let mongodb = MongoDB::init(&config).await;
+        let redis = Redis::new(&config);
         let fixtures = Fixtures::default();
-        let initializer = Initializer {
-            db: &db,
-            config: &config,
-        };
 
-        let database = initializer
-            .get_client()
-            .database(initializer.get_database());
+        let database = mongodb.client.database(&config.db.mongodb.database);
         database.drop(None).await.unwrap();
 
-        let mut connection = db.redis.client.get_connection().unwrap();
+        let mut connection = redis.client.get_connection().unwrap();
         redis::cmd("FLUSHALL").query::<()>(&mut connection).unwrap();
 
         database

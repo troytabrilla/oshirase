@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::error::CustomError;
-use crate::sources::{ExtractOptions, Source};
-use crate::transform::Transform;
+use crate::sources::{Extract, ExtractOptions, Similar, Transform};
 use crate::Media;
 use crate::Result;
 
@@ -48,6 +47,7 @@ pub struct AnimeScheduleEntry {
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct AnimeSchedule(pub HashMap<String, AnimeScheduleEntry>);
 
+#[derive(Clone)]
 pub struct SubsPleaseScraper<'a> {
     config: &'a Config,
 }
@@ -145,10 +145,10 @@ impl SubsPleaseScraper<'_> {
 }
 
 #[async_trait]
-impl Source<'_> for SubsPleaseScraper<'_> {
+impl Extract<'_> for SubsPleaseScraper<'_> {
     type Data = AnimeSchedule;
 
-    async fn extract(&mut self, _options: Option<&ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&self, _options: Option<ExtractOptions>) -> Result<Self::Data> {
         let mut data = self.scrape().await?;
 
         Ok(std::mem::take(&mut data))
@@ -158,12 +158,18 @@ impl Source<'_> for SubsPleaseScraper<'_> {
 impl Transform for SubsPleaseScraper<'_> {
     type Extra = AnimeScheduleEntry;
 
-    fn get_similarity_threshold(&self) -> f64 {
-        self.config.transform.similarity_threshold
-    }
-
     fn set_media(mut media: &mut Media, extra: Option<Self::Extra>) {
         media.schedule = extra;
+    }
+
+    fn transform(&self, media: &mut Media, extras: &HashMap<String, Self::Extra>) -> Result<Media> {
+        self.match_similar(media, extras)
+    }
+}
+
+impl Similar for SubsPleaseScraper<'_> {
+    fn get_similarity_threshold(&self) -> f64 {
+        self.config.transform.similarity_threshold
     }
 }
 
@@ -183,7 +189,7 @@ mod tests {
     #[tokio::test]
     async fn test_extract() {
         let config = Config::default();
-        let mut scraper = SubsPleaseScraper::new(&config);
+        let scraper = SubsPleaseScraper::new(&config);
         let actual = scraper.extract(None).await.unwrap();
         assert!(!actual.0.is_empty());
     }

@@ -30,13 +30,16 @@ async fn main() -> Result<()> {
         None => Config::default(),
     };
 
-    let mut aggregator = Aggregator::new(&config).await;
+    let aggregator = Aggregator::new(&config).await;
 
     if cli.worker_mode {
-        let mut worker = Worker::new(&mut aggregator);
+        let worker = Worker::new(&aggregator);
         worker.run().await;
     } else {
-        let data = aggregator.run(cli.user_id).await?;
+        let options = RunOptions {
+            user_id: cli.user_id,
+        };
+        let data = aggregator.run(Some(options)).await?;
 
         if cli.print {
             println!("{:?}", data);

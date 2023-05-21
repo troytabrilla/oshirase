@@ -1,8 +1,8 @@
 use crate::config::Config;
 
 pub struct Redis<'a> {
-    pub client: redis::Client,
     pub config: &'a Config,
+    pub client: redis::Client,
 }
 
 impl Redis<'_> {

@@ -1,8 +1,8 @@
 use crate::alt_titles_db::AltTitlesEntry;
 use crate::config::Config;
-use crate::db::Document;
 use crate::error::CustomError;
-use crate::sources::{ExtractOptions, Source};
+use crate::sources::Document;
+use crate::sources::{Extract, ExtractOptions};
 use crate::subsplease_scraper::AnimeScheduleEntry;
 use crate::Result;
 
@@ -71,12 +71,11 @@ struct AniListListQuery;
 
 pub struct AniListAPI<'a> {
     config: &'a Config,
-    mongodb: mongodb::Client,
 }
 
 impl AniListAPI<'_> {
-    pub fn new(config: &Config, mongodb: mongodb::Client) -> AniListAPI {
-        AniListAPI { config, mongodb }
+    pub fn new(config: &Config) -> AniListAPI {
+        AniListAPI { config }
     }
 
     fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
@@ -113,15 +112,18 @@ impl AniListAPI<'_> {
         Ok(json)
     }
 
-    pub async fn fetch_user_or_default(&self, user_id: Option<u64>) -> Result<Vec<User>> {
+    pub async fn fetch_user_or_default(
+        &self,
+        user_id: Option<u64>,
+        mongodb_client: mongodb::Client,
+    ) -> Result<Vec<User>> {
         let filter = match user_id {
             Some(user_id) => {
                 doc! { "id": user_id as i64 }
             }
             None => doc! {},
         };
-        let users: Vec<User> = self
-            .mongodb
+        let users: Vec<User> = mongodb_client
             .database(&self.config.db.mongodb.database)
             .collection("users")
             .find(filter, None)
@@ -211,18 +213,26 @@ impl AniListAPI<'_> {
 }
 
 #[async_trait]
-impl Source<'_> for AniListAPI<'_> {
+impl Extract<'_> for AniListAPI<'_> {
     type Data = MediaLists;
 
-    async fn extract(&mut self, options: Option<&ExtractOptions>) -> Result<Self::Data> {
+    async fn extract(&self, options: Option<ExtractOptions>) -> Result<Self::Data> {
         let mut data = Vec::new();
 
-        let user_id = match options {
+        let user_id = match &options {
             Some(options) => options.user_id,
             None => None,
         };
 
-        let users = self.fetch_user_or_default(user_id).await?;
+        let mongodb_client = match options {
+            Some(options) => match options.mongodb_client {
+                Some(mongodb_client) => mongodb_client,
+                None => return Err(CustomError::boxed("No mongodb client provided.")),
+            },
+            None => return Err(CustomError::boxed("No options provided.")),
+        };
+
+        let users = self.fetch_user_or_default(user_id, mongodb_client).await?;
         for user in users {
             data.push(self.fetch_lists(user.id).await?);
         }
@@ -243,7 +253,7 @@ impl Source<'_> for AniListAPI<'_> {
 mod tests {
     use super::*;
     use crate::config::Config;
-    use crate::db::DB;
+    use crate::db::MongoDB;
     use crate::test::helpers::{init, Fixtures, ONCE};
 
     #[tokio::test]
@@ -251,10 +261,10 @@ mod tests {
         ONCE.get_or_init(init).await;
         let config = Config::default();
         let fixtures = Fixtures::default();
-        let db = DB::new(&config).await;
-        let api = AniListAPI::new(&config, db.mongodb.client);
+        let mongodb = MongoDB::new(&config).await;
+        let api = AniListAPI::new(&config);
         let users = api
-            .fetch_user_or_default(Some(fixtures.user.id))
+            .fetch_user_or_default(Some(fixtures.user.id), mongodb.client)
             .await
             .unwrap();
         let actual = api.fetch_lists(users[0].id).await.unwrap();
@@ -266,9 +276,13 @@ mod tests {
     async fn test_extract() {
         ONCE.get_or_init(init).await;
         let config = Config::default();
-        let db = DB::new(&config).await;
-        let mut api = AniListAPI::new(&config, db.mongodb.client);
-        let actual = api.extract(None).await.unwrap();
+        let mongodb = MongoDB::new(&config).await;
+        let api = AniListAPI::new(&config);
+        let options = ExtractOptions {
+            user_id: None,
+            mongodb_client: Some(mongodb.client),
+        };
+        let actual = api.extract(Some(options)).await.unwrap();
         assert!(!actual.anime.is_empty());
         assert!(!actual.manga.is_empty());
     }
