@@ -1,29 +1,27 @@
 mod config;
 mod db;
 mod error;
+mod options;
+mod result;
 mod sources;
 mod test;
 mod worker;
 
-pub use config::Config;
-pub use error::CustomError;
-pub use worker::Worker;
-
 use alt_titles_db::*;
 use anilist_api::*;
-use db::*;
+use db::MongoDB;
+use options::*;
 use sources::*;
 use subsplease_scraper::*;
 
+pub use config::Config;
+pub use error::CustomError;
+pub use options::RunOptions;
+pub use result::Result;
+pub use worker::Worker;
+
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
-
-pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
-
-pub struct RunOptions {
-    pub user_id: Option<u64>,
-}
 
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct Data {
@@ -32,18 +30,12 @@ pub struct Data {
     alt_titles: AltTitles,
 }
 
-pub struct Sources<'a> {
-    anilist_api: AniListAPI<'a>,
-    subsplease_scraper: SubsPleaseScraper<'a>,
-    alt_titles_db: AltTitlesDB<'a>,
-}
-
 pub struct Aggregator<'a> {
     config: &'a Config,
 }
 
 impl<'a> Aggregator<'a> {
-    pub async fn new(config: &'a Config) -> Aggregator<'a> {
+    pub fn new(config: &'a Config) -> Aggregator<'a> {
         Aggregator { config }
     }
 
@@ -52,10 +44,10 @@ impl<'a> Aggregator<'a> {
         sources: &Sources<'a>,
         options: Option<ExtractOptions>,
     ) -> Result<Data> {
-        let (lists, schedule, alt_titles) = tokio::try_join!(
+        let (lists, alt_titles, schedule) = tokio::try_join!(
             sources.anilist_api.extract(options.clone()),
-            sources.subsplease_scraper.extract(options.clone()),
-            sources.alt_titles_db.extract(options),
+            sources.alt_titles_db.extract(options.clone()),
+            sources.subsplease_scraper.extract(options),
         )?;
 
         Ok(Data {
@@ -127,6 +119,7 @@ impl<'a> Aggregator<'a> {
             alt_titles_db: AltTitlesDB::new(self.config),
         };
 
+        // @todo Don't take user id's, just let anilist_api extract grab them from the db.
         let user_id = match options {
             Some(options) => options.user_id,
             None => None,
@@ -161,7 +154,7 @@ mod tests {
 
         let config = Config::default();
         let mongodb = MongoDB::new(&config).await;
-        let aggregator = Aggregator::new(&config).await;
+        let aggregator = Aggregator::new(&config);
         aggregator.run(None).await.unwrap();
 
         let database = mongodb.client.database(&config.db.mongodb.database);

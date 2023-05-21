@@ -1,8 +1,8 @@
+use crate::anilist_api::Media;
 use crate::config::Config;
 use crate::error::CustomError;
+use crate::result::Result;
 use crate::sources::{Extract, ExtractOptions, Similar, Transform};
-use crate::Media;
-use crate::Result;
 
 use async_trait::async_trait;
 use scraper::{ElementRef, Html, Selector};
@@ -194,8 +194,8 @@ mod tests {
         assert!(!actual.0.is_empty());
     }
 
-    #[tokio::test]
-    async fn test_transform() {
+    #[test]
+    fn test_transform() {
         let mut media = [
             Media {
                 media_id: Some(1),

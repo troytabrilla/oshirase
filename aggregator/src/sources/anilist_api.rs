@@ -1,10 +1,10 @@
 use crate::alt_titles_db::AltTitlesEntry;
 use crate::config::Config;
 use crate::error::CustomError;
+use crate::result::Result;
 use crate::sources::Document;
 use crate::sources::{Extract, ExtractOptions};
 use crate::subsplease_scraper::AnimeScheduleEntry;
-use crate::Result;
 
 use async_trait::async_trait;
 use bson::doc;

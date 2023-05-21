@@ -2,21 +2,23 @@ pub mod alt_titles_db;
 pub mod anilist_api;
 pub mod subsplease_scraper;
 
-use crate::Media;
-use crate::Result;
+use crate::anilist_api::Media;
+use crate::options::ExtractOptions;
+use crate::result::Result;
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, hash::Hash};
 
 pub trait Document: DeserializeOwned + Serialize + Hash + Unpin + Send + Sync {}
 
-#[derive(Clone)]
-pub struct ExtractOptions {
-    pub user_id: Option<u64>,
-    pub mongodb_client: Option<mongodb::Client>,
+pub struct Sources<'a> {
+    pub anilist_api: anilist_api::AniListAPI<'a>,
+    pub subsplease_scraper: subsplease_scraper::SubsPleaseScraper<'a>,
+    pub alt_titles_db: alt_titles_db::AltTitlesDB<'a>,
 }
 
-// @todo Add nyaa and mangadex sources
+// @todo Add subsplease rss source
+// @todo Add mangadex api source
 pub enum Extras<'a> {
     SubsPleaseScraper(subsplease_scraper::SubsPleaseScraper<'a>),
 }

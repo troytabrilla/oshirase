@@ -1,8 +1,8 @@
 #[cfg(test)]
 pub mod helpers {
+    use crate::anilist_api::User;
+    use crate::config::Config;
     use crate::db::{MongoDB, Redis};
-    use crate::Config;
-    use crate::User;
 
     use bson::doc;
     use serde::Deserialize;

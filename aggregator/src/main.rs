@@ -1,8 +1,12 @@
-use aggregator::*;
+use aggregator::Aggregator;
+use aggregator::Config;
+use aggregator::Result;
+use aggregator::RunOptions;
+use aggregator::Worker;
 
 use clap::Parser;
 
-#[derive(Parser, Debug)]
+#[derive(Parser)]
 #[command(
     version,
     about = "Aggregate anime and manga data from different sources."
@@ -30,7 +34,7 @@ async fn main() -> Result<()> {
         None => Config::default(),
     };
 
-    let aggregator = Aggregator::new(&config).await;
+    let aggregator = Aggregator::new(&config);
 
     if cli.worker_mode {
         let worker = Worker::new(&aggregator);

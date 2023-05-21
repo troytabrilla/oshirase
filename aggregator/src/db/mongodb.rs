@@ -1,10 +1,10 @@
+use crate::alt_titles_db::AltTitlesEntry;
+use crate::anilist_api::Media;
+use crate::anilist_api::User;
 use crate::config::Config;
+use crate::error::CustomError;
+use crate::result::Result;
 use crate::sources::Document;
-use crate::AltTitlesEntry;
-use crate::CustomError;
-use crate::Media;
-use crate::Result;
-use crate::User;
 
 use mongodb::{
     bson::doc,
@@ -122,8 +122,8 @@ impl MongoDB<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::Config;
     use crate::test::helpers::{init, reset_db, ONCE};
-    use crate::Config;
 
     use futures::TryStreamExt;
     use serde::{Deserialize, Serialize};

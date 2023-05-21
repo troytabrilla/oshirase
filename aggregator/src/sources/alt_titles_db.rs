@@ -1,9 +1,9 @@
 use crate::anilist_api::Media;
 use crate::config::Config;
 use crate::error::CustomError;
+use crate::result::Result;
 use crate::sources::Document;
 use crate::sources::{Extract, ExtractOptions, Transform};
-use crate::Result;
 
 use async_trait::async_trait;
 use futures::StreamExt;
@@ -131,8 +131,8 @@ mod tests {
         assert_eq!(actual.0.get("1").unwrap().alt_titles, expected);
     }
 
-    #[tokio::test]
-    async fn test_transform() {
+    #[test]
+    fn test_transform() {
         let mut media = [Media {
             media_id: Some(1),
             status: Some("CURRENT".to_owned()),
