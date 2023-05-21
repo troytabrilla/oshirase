@@ -28,6 +28,14 @@ pub trait Extract<'a> {
     async fn extract(&self, options: Option<ExtractOptions>) -> Result<Self::Data>;
 }
 
+pub trait Transform {
+    type Extra: Clone;
+
+    fn set_media(media: &mut Media, extra: Option<Self::Extra>);
+
+    fn transform(&self, media: &mut Media, extras: &HashMap<String, Self::Extra>) -> Result<Media>;
+}
+
 pub trait Similar: Transform {
     fn get_similarity_threshold(&self) -> f64;
 
@@ -87,12 +95,4 @@ pub trait Similar: Transform {
 
         Ok(std::mem::take(media))
     }
-}
-
-pub trait Transform {
-    type Extra: Clone;
-
-    fn set_media(media: &mut Media, extra: Option<Self::Extra>);
-
-    fn transform(&self, media: &mut Media, extras: &HashMap<String, Self::Extra>) -> Result<Media>;
 }

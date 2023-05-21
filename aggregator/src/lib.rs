@@ -112,10 +112,10 @@ impl<'a> Aggregator<'a> {
     }
 
     async fn load(&self, data: &'a mut Data, mongodb: &'a MongoDB<'a>) -> Result<&'a mut Data> {
-        let anime_future = mongodb.upsert_documents("anime", &data.lists.anime, "media_id");
-        let manga_future = mongodb.upsert_documents("manga", &data.lists.manga, "media_id");
-
-        tokio::try_join!(anime_future, manga_future)?;
+        tokio::try_join!(
+            mongodb.upsert_documents("anime", &data.lists.anime, "media_id"),
+            mongodb.upsert_documents("manga", &data.lists.manga, "media_id")
+        )?;
 
         Ok(data)
     }
