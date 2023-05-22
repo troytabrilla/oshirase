@@ -125,6 +125,7 @@ impl AniListAPI<'_> {
         Ok(users)
     }
 
+    // @todo Set up AnimeList struct to parse json into instead of extracting manually (see mangadex_api)
     fn transform(&self, json: Option<&Vec<Json>>) -> Result<Vec<Media>> {
         match json {
             Some(json) => {

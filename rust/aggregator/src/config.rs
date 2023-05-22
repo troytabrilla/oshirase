@@ -31,6 +31,8 @@ pub struct DBConfig {
 #[derive(Debug, Deserialize)]
 pub struct MangaDexAPIConfig {
     pub url: String,
+    pub manga_agg_url: String,
+    pub rate_limit: usize,
 }
 
 #[derive(Debug, Deserialize)]

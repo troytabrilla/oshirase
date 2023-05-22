@@ -201,7 +201,7 @@ mod tests {
             Latest {
                 title: "gintama".to_owned(),
                 episode: 1,
-                url: "http:://www.test.nyaa".to_owned(),
+                url: "http://www.test.nyaa".to_owned(),
             },
         )]);
 
