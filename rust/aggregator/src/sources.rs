@@ -1,5 +1,6 @@
 pub mod alt_titles_db;
 pub mod anilist_api;
+pub mod mangadex_api;
 pub mod subsplease_rss;
 pub mod subsplease_scraper;
 

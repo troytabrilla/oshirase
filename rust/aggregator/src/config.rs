@@ -29,6 +29,11 @@ pub struct DBConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct MangaDexAPIConfig {
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct TransformConfig {
     pub similarity_threshold: f64,
 }
@@ -61,6 +66,7 @@ pub struct Config {
     pub aggregator: AggregatorConfig,
     pub anilist_api: AniListAPIConfig,
     pub db: DBConfig,
+    pub mangadex_api: MangaDexAPIConfig,
     pub subsplease: SubsPleaseConfig,
     pub transform: TransformConfig,
     pub worker: WorkerConfig,
