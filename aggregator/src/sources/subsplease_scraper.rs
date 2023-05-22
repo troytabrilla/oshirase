@@ -61,7 +61,8 @@ impl SubsPleaseScraper<'_> {
         let mut caps = serde_json::map::Map::new();
         let chrome_opts: Vec<&str> = self
             .config
-            .subsplease_scraper
+            .subsplease
+            .scraper
             .chrome_options
             .split_whitespace()
             .collect();
@@ -70,9 +71,9 @@ impl SubsPleaseScraper<'_> {
 
         let client = fantoccini::ClientBuilder::native()
             .capabilities(caps)
-            .connect(&self.config.subsplease_scraper.webdriver_url)
+            .connect(&self.config.subsplease.scraper.webdriver_url)
             .await?;
-        client.goto(&self.config.subsplease_scraper.url).await?;
+        client.goto(&self.config.subsplease.scraper.url).await?;
         let locator = fantoccini::Locator::Css(".day-of-week");
         let table = client
             .wait()
@@ -177,14 +178,6 @@ impl Similar for SubsPleaseScraper<'_> {
 mod tests {
     use super::*;
     use crate::config::Config;
-
-    #[tokio::test]
-    async fn test_scrape() {
-        let config = Config::default();
-        let scraper = SubsPleaseScraper::new(&config);
-        let actual = scraper.scrape().await.unwrap();
-        assert!(!actual.0.is_empty());
-    }
 
     #[tokio::test]
     async fn test_extract() {

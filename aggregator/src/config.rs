@@ -34,10 +34,21 @@ pub struct TransformConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct SubsPleaseRSSConfig {
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct SubsPleaseScraperConfig {
     pub url: String,
     pub webdriver_url: String,
     pub chrome_options: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubsPleaseConfig {
+    pub rss: SubsPleaseRSSConfig,
+    pub scraper: SubsPleaseScraperConfig,
 }
 
 #[derive(Debug, Deserialize)]
@@ -50,7 +61,7 @@ pub struct Config {
     pub aggregator: AggregatorConfig,
     pub anilist_api: AniListAPIConfig,
     pub db: DBConfig,
-    pub subsplease_scraper: SubsPleaseScraperConfig,
+    pub subsplease: SubsPleaseConfig,
     pub transform: TransformConfig,
     pub worker: WorkerConfig,
 }

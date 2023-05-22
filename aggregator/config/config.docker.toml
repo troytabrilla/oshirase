@@ -13,7 +13,12 @@ database = "test"
 [db.redis]
 uri = "redis://host.docker.internal:6379"
 
-[subsplease_scraper]
+[subsplease]
+
+[subsplease.rss]
+url = "https://subsplease.org/rss/?t&r=720"
+
+[subsplease.scraper]
 url = "https://subsplease.org/schedule/"
 webdriver_url = "http://localhost:9515"
 chrome_options = "--headless --disable-gpu --no-sandbox --disable-dev-shm-usage"

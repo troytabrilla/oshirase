@@ -12,6 +12,7 @@ use anilist_api::*;
 use db::MongoDB;
 use options::*;
 use sources::*;
+use subsplease_rss::*;
 use subsplease_scraper::*;
 
 pub use config::Config;
@@ -27,6 +28,7 @@ pub struct Data {
     lists: MediaLists,
     schedule: AnimeSchedule,
     alt_titles: AltTitles,
+    latest: AnimeLatest,
 }
 
 pub struct Aggregator<'a> {
@@ -43,16 +45,18 @@ impl<'a> Aggregator<'a> {
         sources: &Sources<'a>,
         options: Option<ExtractOptions>,
     ) -> Result<Data> {
-        let (lists, alt_titles, schedule) = tokio::try_join!(
+        let (lists, alt_titles, schedule, latest) = tokio::try_join!(
             sources.anilist_api.extract(options.clone()),
             sources.alt_titles_db.extract(options.clone()),
-            sources.subsplease_scraper.extract(options),
+            sources.subsplease_scraper.extract(options.clone()),
+            sources.subsplease_rss.extract(options),
         )?;
 
         Ok(Data {
             lists,
-            schedule,
             alt_titles,
+            schedule,
+            latest,
         })
     }
 
@@ -74,14 +78,25 @@ impl<'a> Aggregator<'a> {
                 anime
             })
             .map(|anime| {
-                let extras = [Extras::SubsPleaseScraper(
-                    sources.subsplease_scraper.clone(),
-                )];
+                let extras = [
+                    Extras::SubsPleaseScraper(sources.subsplease_scraper.clone()),
+                    Extras::SubsPleaseRSS(sources.subsplease_rss.clone()),
+                ];
 
                 for extra in extras {
                     match extra {
                         Extras::SubsPleaseScraper(extra) => {
                             let mut transformed = match extra.transform(anime, &data.schedule.0) {
+                                Ok(anime) => anime,
+                                Err(err) => {
+                                    eprintln!("Could not transform media: {}", err);
+                                    std::mem::take(anime)
+                                }
+                            };
+                            *anime = std::mem::take(&mut transformed);
+                        }
+                        Extras::SubsPleaseRSS(extra) => {
+                            let mut transformed = match extra.transform(anime, &data.latest.0) {
                                 Ok(anime) => anime,
                                 Err(err) => {
                                     eprintln!("Could not transform media: {}", err);
@@ -115,6 +130,7 @@ impl<'a> Aggregator<'a> {
         let sources = Sources {
             anilist_api: AniListAPI::new(self.config),
             subsplease_scraper: SubsPleaseScraper::new(self.config),
+            subsplease_rss: SubsPleaseRSS::new(self.config),
             alt_titles_db: AltTitlesDB::new(self.config),
         };
 

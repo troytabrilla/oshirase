@@ -1,5 +1,6 @@
 pub mod alt_titles_db;
 pub mod anilist_api;
+pub mod subsplease_rss;
 pub mod subsplease_scraper;
 
 use crate::anilist_api::Media;
@@ -14,13 +15,14 @@ pub trait Document: DeserializeOwned + Serialize + Hash + Unpin + Send + Sync {}
 pub struct Sources<'a> {
     pub anilist_api: anilist_api::AniListAPI<'a>,
     pub subsplease_scraper: subsplease_scraper::SubsPleaseScraper<'a>,
+    pub subsplease_rss: subsplease_rss::SubsPleaseRSS<'a>,
     pub alt_titles_db: alt_titles_db::AltTitlesDB<'a>,
 }
 
-// @todo Add subsplease rss source
 // @todo Add mangadex api source
 pub enum Extras<'a> {
     SubsPleaseScraper(subsplease_scraper::SubsPleaseScraper<'a>),
+    SubsPleaseRSS(subsplease_rss::SubsPleaseRSS<'a>),
 }
 
 #[async_trait]

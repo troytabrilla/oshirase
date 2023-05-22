@@ -22,10 +22,11 @@ pub struct User {
 
 impl Document for User {}
 
-#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Hash)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Hash)]
 pub struct Latest {
-    pub episode: Option<u64>,
-    pub url: Option<String>,
+    pub title: String,
+    pub episode: u64,
+    pub url: String,
 }
 
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize, Hash)]
