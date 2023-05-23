@@ -23,7 +23,6 @@ pub struct Sources<'a> {
     pub alt_titles_db: alt_titles_db::AltTitlesDB<'a>,
 }
 
-// @todo Add mangadex api source
 pub enum Extras<'a> {
     SubsPleaseScraper(subsplease_scraper::SubsPleaseScraper<'a>),
     SubsPleaseRSS(subsplease_rss::SubsPleaseRSS<'a>),

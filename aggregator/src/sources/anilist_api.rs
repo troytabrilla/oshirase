@@ -12,8 +12,6 @@ use futures::TryStreamExt;
 use graphql_client::GraphQLQuery;
 use serde::{Deserialize, Serialize};
 
-type Json = serde_json::Value;
-
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize, Hash)]
 pub enum MediaType {
     #[default]
@@ -97,6 +95,60 @@ impl MediaLists {
 )]
 struct AniListListQuery;
 
+#[derive(Debug, Deserialize)]
+struct CoverImage {
+    large: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MediaTitle {
+    romaji: Option<String>,
+    english: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResultMedia {
+    id: Option<u64>,
+    r#type: Option<String>,
+    format: Option<String>,
+    season: Option<String>,
+    #[serde(rename = "seasonYear")]
+    season_year: Option<u64>,
+    title: MediaTitle,
+    #[serde(rename = "coverImage")]
+    cover_image: CoverImage,
+    episodes: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Entry {
+    media: ResultMedia,
+    status: Option<String>,
+    score: Option<u64>,
+    progress: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MediaList {
+    entries: Vec<Entry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct MediaListCollection {
+    lists: Vec<MediaList>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AniListListQueryData {
+    anime: MediaListCollection,
+    manga: MediaListCollection,
+}
+
+#[derive(Debug, Deserialize)]
+struct AniListListQueryResults {
+    data: AniListListQueryData,
+}
+
 pub struct AniListAPI<'a> {
     config: &'a Config,
 }
@@ -106,38 +158,20 @@ impl AniListAPI<'_> {
         AniListAPI { config }
     }
 
-    fn extract_value<'a>(json: &'a Json, key: &str) -> &'a Json {
-        json.pointer(key).unwrap_or(&Json::Null)
-    }
-
-    fn extract_value_as_array<'a>(json: &'a Json, key: &str) -> Option<&'a Vec<Json>> {
-        Self::extract_value(json, key).as_array()
-    }
-
-    fn extract_value_as_u64(json: &Json, key: &str) -> Option<u64> {
-        Self::extract_value(json, key).as_u64()
-    }
-
-    fn extract_value_as_string(json: &Json, key: &str) -> Option<String> {
-        Self::extract_value(json, key)
-            .as_str()
-            .map(ToOwned::to_owned)
-    }
-
-    async fn fetch<T>(&self, body: &T) -> Result<Json>
+    async fn fetch<T>(&self, body: &T) -> Result<AniListListQueryResults>
     where
         T: Serialize,
     {
         let client = reqwest::Client::new();
-        let json = client
+        let results = client
             .post(self.config.anilist_api.url.as_str())
             .json(&body)
             .send()
             .await?
-            .json::<Json>()
+            .json::<AniListListQueryResults>()
             .await?;
 
-        Ok(json)
+        Ok(results)
     }
 
     pub async fn fetch_users(&self, mongodb_client: mongodb::Client) -> Result<Vec<User>> {
@@ -152,58 +186,38 @@ impl AniListAPI<'_> {
         Ok(users)
     }
 
-    // @todo Set up AnimeList struct to parse json into instead of extracting manually (see mangadex_api)
-    fn transform(&self, json: Option<&Vec<Json>>) -> Result<Vec<Media>> {
-        match json {
-            Some(json) => {
-                let list: Vec<Media> =
-                    json.iter().fold(Vec::new() as Vec<Media>, |mut acc, list| {
-                        if let Some(entries) = Self::extract_value_as_array(list, "/entries") {
-                            for entry in entries {
-                                let media = Media {
-                                    media_id: Self::extract_value_as_u64(entry, "/media/id"),
-                                    media_type: MediaType::from_option_str(
-                                        Self::extract_value_as_string(entry, "/media/type")
-                                            .as_deref(),
-                                    ),
-                                    status: Self::extract_value_as_string(entry, "/status"),
-                                    format: Self::extract_value_as_string(entry, "/media/format"),
-                                    season: Self::extract_value_as_string(entry, "/media/season"),
-                                    season_year: Self::extract_value_as_u64(
-                                        entry,
-                                        "/media/seasonYear",
-                                    ),
-                                    title: Self::extract_value_as_string(
-                                        entry,
-                                        "/media/title/romaji",
-                                    ),
-                                    english_title: Self::extract_value_as_string(
-                                        entry,
-                                        "/media/title/english",
-                                    ),
-                                    image: Self::extract_value_as_string(
-                                        entry,
-                                        "/media/coverImage/large",
-                                    ),
-                                    episodes: Self::extract_value_as_u64(entry, "/media/episodes"),
-                                    score: Self::extract_value_as_u64(entry, "/score"),
-                                    progress: Self::extract_value_as_u64(entry, "/progress"),
-                                    latest: None,
-                                    schedule: None,
-                                    alt_titles: None,
-                                };
+    fn transform(&self, lists: &[MediaList]) -> Result<Vec<Media>> {
+        let list = lists
+            .iter()
+            .fold(Vec::new() as Vec<Media>, |mut acc, list| {
+                for entry in &list.entries {
+                    let media = Media {
+                        media_id: entry.media.id,
+                        media_type: MediaType::from_option_str(
+                            entry.media.r#type.clone().as_deref(),
+                        ),
+                        status: entry.status.clone(),
+                        format: entry.media.format.clone(),
+                        season: entry.media.season.clone(),
+                        season_year: entry.media.season_year,
+                        title: entry.media.title.romaji.clone(),
+                        english_title: entry.media.title.english.clone(),
+                        image: entry.media.cover_image.large.clone(),
+                        episodes: entry.media.episodes,
+                        score: entry.score,
+                        progress: entry.progress,
+                        schedule: None,
+                        latest: None,
+                        alt_titles: None,
+                    };
 
-                                acc.push(media);
-                            }
-                        }
+                    acc.push(media);
+                }
 
-                        acc
-                    });
+                acc
+            });
 
-                Ok(list)
-            }
-            None => Err(CustomError::boxed("No response to transform.")),
-        }
+        Ok(list)
     }
 
     pub async fn fetch_lists(&self, user_id: u64) -> Result<MediaLists> {
@@ -220,13 +234,11 @@ impl AniListAPI<'_> {
         };
         let body = AniListListQuery::build_query(variables);
 
-        let json = self.fetch(&body).await?;
+        let results = self.fetch(&body).await?;
 
-        let anime = Self::extract_value_as_array(&json, "/data/anime/lists");
-        let anime = self.transform(anime)?;
+        let anime = self.transform(&results.data.anime.lists)?;
 
-        let manga = Self::extract_value_as_array(&json, "/data/manga/lists");
-        let manga = self.transform(manga)?;
+        let manga = self.transform(&results.data.manga.lists)?;
 
         let lists = MediaLists { anime, manga };
 

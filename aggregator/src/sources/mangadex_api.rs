@@ -67,7 +67,7 @@ impl MangaDexAPI<'_> {
 
     pub async fn fetch(&self) -> Result<MangaLatest> {
         let client = reqwest::Client::new();
-        let json = client
+        let results = client
             .get(self.config.mangadex_api.url.as_str())
             .send()
             .await?
@@ -78,11 +78,11 @@ impl MangaDexAPI<'_> {
         let mut batches: Vec<Vec<(String, String)>> = Vec::new();
         let mut current_batch: Vec<(String, String)> = Vec::new();
 
-        if json.result != "ok" {
+        if results.result != "ok" {
             return Err(CustomError::boxed("Could not fetch manga list."));
         }
 
-        for rel in json.data.relationships {
+        for rel in results.data.relationships {
             if rel.r#type == "manga" {
                 if let Some(attributes) = rel.attributes {
                     let id = rel.id;
