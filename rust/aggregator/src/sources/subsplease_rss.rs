@@ -1,4 +1,4 @@
-use crate::anilist_api::{Latest, Media};
+use crate::anilist_api::{Latest, Media, MediaType};
 use crate::config::Config;
 use crate::options::ExtractOptions;
 use crate::result::Result;
@@ -153,7 +153,7 @@ impl Transform for SubsPleaseRSS<'_> {
     }
 
     fn transform(&self, media: &mut Media, extras: &HashMap<String, Self::Extra>) -> Result<Media> {
-        self.match_similar(media, extras)
+        self.match_similar(media, MediaType::Anime, extras)
     }
 }
 
@@ -173,7 +173,6 @@ mod tests {
         let config = Config::default();
         let rss = SubsPleaseRSS::new(&config);
         let latest = rss.extract(None).await.unwrap();
-        println!("{:#?}", latest);
         assert!(!latest.0.is_empty());
     }
 
@@ -184,7 +183,7 @@ mod tests {
             status: Some("CURRENT".to_owned()),
             title: Some("Gintama".to_owned()),
             english_title: Some("Gin Tama".to_owned()),
-            media_type: None,
+            media_type: Some(MediaType::Anime),
             format: None,
             season: None,
             season_year: None,

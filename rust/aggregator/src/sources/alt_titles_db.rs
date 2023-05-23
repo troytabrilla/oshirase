@@ -124,7 +124,6 @@ mod tests {
         };
         let actual = alt_titles_db.extract(Some(options)).await.unwrap();
 
-        println!("{:#?}", actual);
         assert_eq!(actual.0.len(), 1);
         assert_eq!(actual.0.get("1").unwrap().media_id, 1);
         assert_eq!(actual.0.get("1").unwrap().alt_titles, expected);

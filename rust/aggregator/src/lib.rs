@@ -10,6 +10,7 @@ mod worker;
 use alt_titles_db::*;
 use anilist_api::*;
 use db::MongoDB;
+use mangadex_api::*;
 use options::*;
 use sources::*;
 use subsplease_rss::*;
@@ -28,7 +29,8 @@ pub struct Data {
     lists: MediaLists,
     schedule: AnimeSchedule,
     alt_titles: AltTitles,
-    latest: AnimeLatest,
+    anime_latest: AnimeLatest,
+    manga_latest: MangaLatest,
 }
 
 pub struct Aggregator<'a> {
@@ -45,18 +47,20 @@ impl<'a> Aggregator<'a> {
         sources: &Sources<'a>,
         options: Option<ExtractOptions>,
     ) -> Result<Data> {
-        let (lists, alt_titles, schedule, latest) = tokio::try_join!(
+        let (lists, alt_titles, schedule, anime_latest, manga_latest) = tokio::try_join!(
             sources.anilist_api.extract(options.clone()),
             sources.alt_titles_db.extract(options.clone()),
             sources.subsplease_scraper.extract(options.clone()),
-            sources.subsplease_rss.extract(options),
+            sources.subsplease_rss.extract(options.clone()),
+            sources.mangadex_api.extract(options)
         )?;
 
         Ok(Data {
             lists,
             alt_titles,
             schedule,
-            latest,
+            anime_latest,
+            manga_latest,
         })
     }
 
@@ -96,7 +100,8 @@ impl<'a> Aggregator<'a> {
                             *anime = std::mem::take(&mut transformed);
                         }
                         Extras::SubsPleaseRSS(extra) => {
-                            let mut transformed = match extra.transform(anime, &data.latest.0) {
+                            let mut transformed = match extra.transform(anime, &data.anime_latest.0)
+                            {
                                 Ok(anime) => anime,
                                 Err(err) => {
                                     eprintln!("Could not transform media: {}", err);
@@ -105,6 +110,7 @@ impl<'a> Aggregator<'a> {
                             };
                             *anime = std::mem::take(&mut transformed);
                         }
+                        _ => {}
                     }
                 }
 
@@ -113,6 +119,44 @@ impl<'a> Aggregator<'a> {
             .map(std::mem::take)
             .collect();
         data.lists.anime = anime;
+
+        let manga = data
+            .lists
+            .manga
+            .par_iter_mut()
+            .map(|manga| {
+                let mut transformed =
+                    match sources.alt_titles_db.transform(manga, &data.alt_titles.0) {
+                        Ok(manga) => manga,
+                        Err(err) => {
+                            eprintln!("Could not add alt titles: {}", err);
+                            std::mem::take(manga)
+                        }
+                    };
+                *manga = std::mem::take(&mut transformed);
+                manga
+            })
+            .map(|manga| {
+                let extras = [Extras::MangaDexAPI(sources.mangadex_api.clone())];
+
+                for extra in extras {
+                    if let Extras::MangaDexAPI(extra) = extra {
+                        let mut transformed = match extra.transform(manga, &data.manga_latest.0) {
+                            Ok(manga) => manga,
+                            Err(err) => {
+                                eprintln!("Could not transform media: {}", err);
+                                std::mem::take(manga)
+                            }
+                        };
+                        *manga = std::mem::take(&mut transformed);
+                    }
+                }
+
+                manga
+            })
+            .map(std::mem::take)
+            .collect();
+        data.lists.manga = manga;
 
         Ok(data)
     }
@@ -131,6 +175,7 @@ impl<'a> Aggregator<'a> {
             anilist_api: AniListAPI::new(self.config),
             subsplease_scraper: SubsPleaseScraper::new(self.config),
             subsplease_rss: SubsPleaseRSS::new(self.config),
+            mangadex_api: MangaDexAPI::new(self.config),
             alt_titles_db: AltTitlesDB::new(self.config),
         };
 

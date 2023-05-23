@@ -14,6 +14,33 @@ use serde::{Deserialize, Serialize};
 
 type Json = serde_json::Value;
 
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Hash)]
+pub enum MediaType {
+    #[default]
+    Anime,
+    Manga,
+}
+
+impl MediaType {
+    pub fn from_str(s: &str) -> Result<MediaType> {
+        let s = s.to_lowercase();
+        if s == "anime" {
+            Ok(MediaType::Anime)
+        } else if s.to_lowercase() == "manga" {
+            Ok(MediaType::Manga)
+        } else {
+            Err(CustomError::boxed(&format!("Invalid media type: {s}.")))
+        }
+    }
+
+    pub fn from_option_str(s: Option<&str>) -> Option<MediaType> {
+        match s {
+            Some(s) => Self::from_str(s).ok(),
+            None => None,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Deserialize, Serialize, Hash)]
 pub struct User {
     pub id: u64,
@@ -32,7 +59,7 @@ pub struct Latest {
 #[derive(Debug, Default, PartialEq, Deserialize, Serialize, Hash)]
 pub struct Media {
     pub media_id: Option<u64>,
-    pub media_type: Option<String>,
+    pub media_type: Option<MediaType>,
     pub status: Option<String>,
     pub format: Option<String>,
     pub season: Option<String>,
@@ -135,7 +162,10 @@ impl AniListAPI<'_> {
                             for entry in entries {
                                 let media = Media {
                                     media_id: Self::extract_value_as_u64(entry, "/media/id"),
-                                    media_type: Self::extract_value_as_string(entry, "/media/type"),
+                                    media_type: MediaType::from_option_str(
+                                        Self::extract_value_as_string(entry, "/media/type")
+                                            .as_deref(),
+                                    ),
                                     status: Self::extract_value_as_string(entry, "/status"),
                                     format: Self::extract_value_as_string(entry, "/media/format"),
                                     season: Self::extract_value_as_string(entry, "/media/season"),

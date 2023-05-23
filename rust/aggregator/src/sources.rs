@@ -5,8 +5,10 @@ pub mod subsplease_rss;
 pub mod subsplease_scraper;
 
 use crate::anilist_api::Media;
+use crate::anilist_api::MediaType;
 use crate::options::ExtractOptions;
 use crate::result::Result;
+
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, hash::Hash};
@@ -17,6 +19,7 @@ pub struct Sources<'a> {
     pub anilist_api: anilist_api::AniListAPI<'a>,
     pub subsplease_scraper: subsplease_scraper::SubsPleaseScraper<'a>,
     pub subsplease_rss: subsplease_rss::SubsPleaseRSS<'a>,
+    pub mangadex_api: mangadex_api::MangaDexAPI<'a>,
     pub alt_titles_db: alt_titles_db::AltTitlesDB<'a>,
 }
 
@@ -24,6 +27,7 @@ pub struct Sources<'a> {
 pub enum Extras<'a> {
     SubsPleaseScraper(subsplease_scraper::SubsPleaseScraper<'a>),
     SubsPleaseRSS(subsplease_rss::SubsPleaseRSS<'a>),
+    MangaDexAPI(mangadex_api::MangaDexAPI<'a>),
 }
 
 #[async_trait]
@@ -47,9 +51,10 @@ pub trait Similar: Transform {
     fn match_similar(
         &self,
         media: &mut Media,
+        media_type: MediaType,
         extras: &HashMap<String, Self::Extra>,
     ) -> Result<Media> {
-        if media.status == Some("CURRENT".to_string()) {
+        if media.status == Some("CURRENT".to_string()) && media.media_type == Some(media_type) {
             let title = match media.title.to_owned() {
                 Some(title) => title,
                 None => String::new(),

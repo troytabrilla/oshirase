@@ -1,4 +1,4 @@
-use crate::anilist_api::Media;
+use crate::anilist_api::{Media, MediaType};
 use crate::config::Config;
 use crate::error::CustomError;
 use crate::result::Result;
@@ -164,7 +164,7 @@ impl Transform for SubsPleaseScraper<'_> {
     }
 
     fn transform(&self, media: &mut Media, extras: &HashMap<String, Self::Extra>) -> Result<Media> {
-        self.match_similar(media, extras)
+        self.match_similar(media, MediaType::Anime, extras)
     }
 }
 
@@ -195,7 +195,7 @@ mod tests {
                 status: Some("CURRENT".to_owned()),
                 title: Some("Gintama".to_owned()),
                 english_title: Some("Gin Tama".to_owned()),
-                media_type: None,
+                media_type: Some(MediaType::Anime),
                 format: None,
                 season: None,
                 season_year: None,
@@ -212,7 +212,7 @@ mod tests {
                 status: Some("CURRENT".to_owned()),
                 title: Some("naruto".to_owned()),
                 english_title: None,
-                media_type: None,
+                media_type: Some(MediaType::Anime),
                 format: None,
                 season: None,
                 season_year: None,
@@ -229,7 +229,7 @@ mod tests {
                 status: Some("CURRENT".to_owned()),
                 title: None,
                 english_title: Some("tamako market".to_owned()),
-                media_type: None,
+                media_type: Some(MediaType::Anime),
                 format: None,
                 season: None,
                 season_year: None,

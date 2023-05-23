@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::error::CustomError;
 use crate::options::ExtractOptions;
 use crate::result::Result;
-use crate::sources::anilist_api::{Latest, Media};
+use crate::sources::anilist_api::{Latest, Media, MediaType};
 use crate::sources::{Extract, Similar, Transform};
 
 use async_trait::async_trait;
@@ -53,9 +53,10 @@ struct MangaAggregate {
 }
 
 #[derive(Debug, Default, Deserialize, Serialize)]
-struct MangaLatest(pub HashMap<String, Latest>);
+pub struct MangaLatest(pub HashMap<String, Latest>);
 
-struct MangaDexAPI<'a> {
+#[derive(Debug, Clone)]
+pub struct MangaDexAPI<'a> {
     pub config: &'a Config,
 }
 
@@ -99,7 +100,7 @@ impl MangaDexAPI<'_> {
                             current_batch.push((title.to_owned(), id.to_owned()));
                         } else {
                             batches.push(current_batch);
-                            current_batch = Vec::new();
+                            current_batch = vec![(title.to_owned(), id.to_owned())];
                         }
                     }
                 }
@@ -188,7 +189,7 @@ impl Transform for MangaDexAPI<'_> {
     }
 
     fn transform(&self, media: &mut Media, extras: &HashMap<String, Self::Extra>) -> Result<Media> {
-        self.match_similar(media, extras)
+        self.match_similar(media, MediaType::Manga, extras)
     }
 }
 
@@ -217,7 +218,7 @@ mod tests {
             status: Some("CURRENT".to_owned()),
             title: Some("Gintama".to_owned()),
             english_title: Some("Gin Tama".to_owned()),
-            media_type: None,
+            media_type: Some(MediaType::Manga),
             format: None,
             season: None,
             season_year: None,
