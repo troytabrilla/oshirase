@@ -107,6 +107,10 @@ impl MangaDexAPI<'_> {
             }
         }
 
+        if !current_batch.is_empty() {
+            batches.push(current_batch);
+        }
+
         for batch in batches {
             let mut futures = JoinSet::new();
 
