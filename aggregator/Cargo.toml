@@ -3,28 +3,8 @@ name = "aggregator"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-async-trait = "0.1"
-bson = "2.6"
-clap = { version = "4.2", features = ["derive"] }
-fantoccini = "0.19"
-futures = "0.3"
-graphql_client = "0.12"
-mongodb = "2.5"
 rayon = "1.7"
-redis = { version = "0.23", features = ["tokio-comp"] }
-regex = "1.8"
-reqwest = { version = "0.11", default-features = false, features = [
-    "json",
-    "rustls-tls",
-] }
-scraper = "0.16"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde-xml-rs = "0.6"
 strsim = "0.10"
-time = { version = "0.3", features = ["serde"] }
-tokio = { version = "1.0", features = ["full"] }
-toml = "0.7"

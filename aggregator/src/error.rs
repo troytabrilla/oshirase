@@ -1,29 +1,20 @@
-use std::{
-    error::Error,
-    fmt::{Display, Formatter, Result},
-};
-
 #[derive(Debug)]
-pub struct CustomError {
+pub struct AggregatorError {
     message: String,
 }
 
-impl CustomError {
-    pub fn new(message: &str) -> CustomError {
-        CustomError {
+impl AggregatorError {
+    pub fn new(message: &str) -> Self {
+        Self {
             message: message.to_owned(),
         }
     }
-
-    pub fn boxed(message: &str) -> Box<CustomError> {
-        Box::new(CustomError::new(message))
-    }
 }
 
-impl Display for CustomError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(f, "{}", self.message)
+impl std::error::Error for AggregatorError {}
+
+impl std::fmt::Display for AggregatorError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Aggregator Error: {}", self.message)
     }
 }
-
-impl Error for CustomError {}

@@ -18,6 +18,7 @@ func AddRoutes(group *gin.RouterGroup, config *conf.Config) {
 
 	animeGroup := group.Group("/anime")
 	{
+		// TODO Move this to anime controller
 		animeGroup.GET("/list", AnimeList.GET)
 		animeGroup.GET("/schedule", Schedule.GET)
 		idGroup := animeGroup.Group("/:id")
@@ -31,6 +32,7 @@ func AddRoutes(group *gin.RouterGroup, config *conf.Config) {
 
 	mangaGroup := group.Group("/manga")
 	{
+		// TODO Move this to manga controller
 		mangaGroup.GET("/list", MangaList.GET)
 		idGroup := mangaGroup.Group("/:id")
 		{

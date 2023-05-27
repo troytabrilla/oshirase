@@ -11,6 +11,7 @@ import (
 	"github.com/troytabrilla/oshirase/api/api/conf"
 )
 
+// TODO Move structs to models
 type Variables struct {
 	UserID   int      `json:"user_id"`
 	StatusIn []string `json:"status_in"`
@@ -183,7 +184,7 @@ func (list List) GET(context *gin.Context) {
 	// TODO Write transformer/aggregator in Rust to combine source data into a single list,
 	// figure out best way to optimize, extra data can vary, but base is always anilist source + alt titles
 	// TODO Figure out how to call Rust code from Go
-	// TODO Move configs to root level, make config path an environment variable or cli arg
+	// TODO Move configs and graphql to root level, make config and graphql paths environment variables or cli args
 	// TODO Add tests
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
