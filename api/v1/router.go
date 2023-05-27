@@ -2,17 +2,20 @@ package v1
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/troytabrilla/oshirase/api/api/conf"
 	"github.com/troytabrilla/oshirase/api/api/v1/anime"
 	"github.com/troytabrilla/oshirase/api/api/v1/manga"
 )
 
 var Schedule = anime.Schedule{}
-var AnimeList = anime.List{}
+var AnimeList anime.List
 var Anime = anime.Anime{}
 var MangaList = manga.List{}
 var Manga = manga.Manga{}
 
-func AddRoutes(group *gin.RouterGroup) {
+func AddRoutes(group *gin.RouterGroup, config *conf.Config) {
+	AnimeList = anime.List{Config: config}
+
 	animeGroup := group.Group("/anime")
 	{
 		animeGroup.GET("/list", AnimeList.GET)

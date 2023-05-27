@@ -11,6 +11,9 @@ type Schedule struct{}
 // TODO Implement
 func (s Schedule) GET(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Anime Schedule",
+		"status": 200,
+		"data": gin.H{
+			"message": "Anime Schedule",
+		},
 	})
 }

@@ -12,7 +12,10 @@ type Anime struct{}
 // TODO Implement
 func (a Anime) GET(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Reading Anime %s", c.Param("id")),
+		"status": 200,
+		"data": gin.H{
+			"message": fmt.Sprintf("Reading Anime %s", c.Param("id")),
+		},
 	})
 }
 
@@ -20,6 +23,9 @@ func (a Anime) GET(c *gin.Context) {
 // TODO Authenticate
 func (a Anime) PUT(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Updating Anime %s", c.Param("id")),
+		"status": 200,
+		"data": gin.H{
+			"message": fmt.Sprintf("Updating Anime %s", c.Param("id")),
+		},
 	})
 }

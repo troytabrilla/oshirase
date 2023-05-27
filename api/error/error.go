@@ -19,9 +19,8 @@ func (n NotFoundError) Error() string {
 func HandleErrors(c *gin.Context) {
 	c.Next()
 
-	logger := log.Default()
 	for _, err := range c.Errors {
-		logger.Println(err)
+		log.Println(err)
 	}
 
 	last := c.Errors.Last()
@@ -30,15 +29,26 @@ func HandleErrors(c *gin.Context) {
 	}
 
 	switch c.Writer.Status() {
+	case 400:
+		c.JSON(400, gin.H{
+			"status": 400,
+			"data": gin.H{
+				"message": last.Error(),
+			},
+		})
 	case 404:
 		c.JSON(404, gin.H{
-			"status":  404,
-			"message": last.Error(),
+			"status": 404,
+			"data": gin.H{
+				"message": last.Error(),
+			},
 		})
 	default:
 		c.JSON(500, gin.H{
-			"status":  500,
-			"message": "Whoops...",
+			"status": 500,
+			"data": gin.H{
+				"message": "Whoops...",
+			},
 		})
 	}
 }
