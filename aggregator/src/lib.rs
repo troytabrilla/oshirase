@@ -14,6 +14,7 @@ pub use error::AggregatorError;
 * Read config parameters from cli args, create a default config struct and override defaults with cli args
 * fn add_alt_titles(list, alt_titles) -> list; use media_id for joins
 * fn add_extras(list, extras) -> list called for variable number of extras; try title hash, then title levanshtein distance for all title combinations
+* Add best non-exact matches to alt titles and persist for future runs, loading alt titles should provide exact match on next run
 */
 
 pub fn run() -> Result<(), AggregatorError> {

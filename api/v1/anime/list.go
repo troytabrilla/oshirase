@@ -14,6 +14,7 @@ import (
 // TODO Move structs to models
 type Variables struct {
 	UserID   int      `json:"user_id"`
+	Type     string   `json:"type"`
 	StatusIn []string `json:"status_in"`
 }
 
@@ -60,8 +61,7 @@ type MediaListCollection struct {
 }
 
 type Data struct {
-	Anime MediaListCollection `json:"anime"`
-	Manga MediaListCollection `json:"manga"`
+	MediaListCollection MediaListCollection
 }
 
 type Result struct {
@@ -97,7 +97,7 @@ func (a AniListAPIError) GetStatus() int {
 }
 
 func loadQuery() (string, error) {
-	query, err := os.ReadFile("./graphql/anilist/list_query.graphql")
+	query, err := os.ReadFile("../graphql/anilist/list_query.graphql")
 	if err != nil {
 		return "", err
 	}
@@ -125,6 +125,7 @@ func (list List) GET(context *gin.Context) {
 		Query: query,
 		Variables: Variables{
 			UserID:   list.Config.AniListAPI.UserID,
+			Type:     "ANIME",
 			StatusIn: []string{"CURRENT", "PLANNING", "COMPLETED", "DROPPED", "PAUSED", "REPEATING"},
 		},
 	}
@@ -179,15 +180,14 @@ func (list List) GET(context *gin.Context) {
 	}
 
 	// TODO Flatten lists
-	// TODO Refactor into controllers, models, and loaders
-	// TODO Controllers need to decide which models and loaders to use
-	// TODO Write transformer/aggregator in Rust to combine source data into a single list,
+	// TODO Refactor into controllers, models, and sources
+	// TODO Controllers need to decide which models to use, models need to decide which sources to use
+	// TODO Write transformer/aggregator in C++ to combine source data into a single list,
 	// figure out best way to optimize, extra data can vary, but base is always anilist source + alt titles
-	// TODO Figure out how to call Rust code from Go
 	// TODO Move configs and graphql to root level, make config and graphql paths environment variables or cli args
 	// TODO Add tests
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
-		"data":   result.Data.Anime.Lists,
+		"data":   result.Data.MediaListCollection.Lists,
 	})
 }

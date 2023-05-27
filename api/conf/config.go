@@ -21,7 +21,7 @@ type Config struct {
 func LoadConfig() Config {
 	config := Config{}
 
-	file, err := os.ReadFile("./config/config.yaml")
+	file, err := os.ReadFile("../config/config.yaml")
 	if err != nil {
 		fmt.Println("what")
 		log.Fatalf("Could not load config file: %v", err)
