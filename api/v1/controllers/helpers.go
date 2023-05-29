@@ -1,4 +1,4 @@
-package v1
+package controllers
 
 import (
 	"fmt"
@@ -9,7 +9,6 @@ import (
 	"github.com/troytabrilla/oshirase/api/api/error"
 )
 
-// TODO Move this to controllers/helpers.go
 func LoadMediaByID(mediaType string) func(*gin.Context) {
 	return func(c *gin.Context) {
 		idParam := c.Param("id")
