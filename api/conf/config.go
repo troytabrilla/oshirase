@@ -1,7 +1,6 @@
 package conf
 
 import (
-	"fmt"
 	"log"
 	"os"
 
@@ -23,13 +22,13 @@ func LoadConfig() Config {
 
 	file, err := os.ReadFile("../config/config.yaml")
 	if err != nil {
-		fmt.Println("what")
 		log.Fatalf("Could not load config file: %v", err)
+		os.Exit(1)
 	}
 	err = yaml.Unmarshal(file, &config)
 	if err != nil {
-		fmt.Println("hello")
 		log.Fatalf("Could not parse config file: %v", err)
+		os.Exit(1)
 	}
 
 	return config

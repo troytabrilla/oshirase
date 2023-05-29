@@ -134,11 +134,9 @@ type AniListAPI struct {
 }
 
 func (api AniListAPI) Fetch(userId int, mediaType string, status []string) ([]FlatMedia, error) {
-	empty := []FlatMedia{}
-
 	query, err := os.ReadFile("../graphql/anilist/list_query.graphql")
 	if err != nil {
-		return empty, err
+		return []FlatMedia{}, err
 	}
 
 	if len(status) == 0 {
@@ -156,12 +154,12 @@ func (api AniListAPI) Fetch(userId int, mediaType string, status []string) ([]Fl
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return empty, err
+		return []FlatMedia{}, err
 	}
 
 	req, err := http.NewRequest("POST", api.Config.AniListAPI.URL, bytes.NewBuffer(body))
 	if err != nil {
-		return empty, err
+		return []FlatMedia{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -170,30 +168,30 @@ func (api AniListAPI) Fetch(userId int, mediaType string, status []string) ([]Fl
 	client := http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
-		return empty, err
+		return []FlatMedia{}, err
 	}
 
 	defer res.Body.Close()
 
 	body, err = io.ReadAll(res.Body)
 	if err != nil {
-		return empty, err
+		return []FlatMedia{}, err
 	}
 
 	if res.Status != "200 OK" {
 		var apiErr AniListAPIError
 		err = json.Unmarshal(body, &apiErr)
 		if err != nil {
-			return empty, err
+			return []FlatMedia{}, err
 		}
 
-		return empty, apiErr
+		return []FlatMedia{}, apiErr
 	}
 
 	var result AniListAPIResult
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return empty, err
+		return []FlatMedia{}, err
 	}
 
 	lists := result.Data.MediaListCollection.Lists
@@ -219,6 +217,5 @@ func (api AniListAPI) Fetch(userId int, mediaType string, status []string) ([]Fl
 		}
 	}
 
-	// TODO Add tests
 	return flattened, nil
 }
