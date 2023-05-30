@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/troytabrilla/oshirase/api/api/conf"
 	"github.com/troytabrilla/oshirase/api/api/v1/models"
+	"github.com/troytabrilla/oshirase/api/api/v1/sources"
 )
 
 type MangaEntry struct{}
@@ -37,17 +38,17 @@ type MangaList struct {
 }
 
 func (list MangaList) GET(context *gin.Context) {
-	api := models.AniListAPI{Config: list.Config}
+	anilist := models.AniList{Config: list.Config}
 	userId := list.Config.AniListAPI.UserID
 	status := []string{}
 
-	result, err := api.Fetch(userId, "MANGA", status)
+	result, err := anilist.FetchList(userId, "MANGA", status)
 	if err != nil {
 		context.Error(err)
 
 		var status int
 		switch err := err.(type) {
-		case models.AniListAPIError:
+		case sources.AniListAPIError:
 			status = err.GetStatus()
 		default:
 			status = -1
