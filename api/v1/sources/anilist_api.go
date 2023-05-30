@@ -77,7 +77,7 @@ func (api AniListAPI) Fetch(userId int, mediaType string, status []string) ([]by
 		return []byte{}, err
 	}
 
-	req, err := http.NewRequest("POST", api.Config.AniListAPI.URL, bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", api.Config.AniList.API.URL, bytes.NewBuffer(body))
 	if err != nil {
 		return []byte{}, err
 	}

@@ -13,8 +13,12 @@ type AniListAPIConfig struct {
 	UserID int `yaml:"user_id"`
 }
 
+type AniListConfig struct {
+	API AniListAPIConfig `yaml:"api"`
+}
+
 type Config struct {
-	AniListAPI AniListAPIConfig `yaml:"anilist_api"`
+	AniList AniListConfig `yaml:"anilist"`
 }
 
 func LoadConfig() Config {
