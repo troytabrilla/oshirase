@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/troytabrilla/oshirase/api/api/conf"
 	"github.com/troytabrilla/oshirase/api/api/v1/controllers"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 var AnimeList controllers.AnimeList
@@ -12,7 +13,7 @@ var AnimeSchedule controllers.AnimeSchedule
 var AnimeEntry = controllers.AnimeEntry{}
 var MangaEntry = controllers.MangaEntry{}
 
-func AddRoutes(group *gin.RouterGroup, config *conf.Config) {
+func AddRoutes(group *gin.RouterGroup, config *conf.Config, client *mongo.Client) {
 	AnimeList = controllers.AnimeList{Config: config}
 	AnimeSchedule = controllers.AnimeSchedule{Config: config}
 	MangaList = controllers.MangaList{Config: config}

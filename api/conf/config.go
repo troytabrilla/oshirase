@@ -29,6 +29,15 @@ type SubsPleaseConfig struct {
 	RSS SubsPleaseRSSConfig `yaml:"rss"`
 }
 
+type MongoDBConfig struct {
+	URI      string `yaml:"uri"`
+	Database string `yaml:"database"`
+}
+
+type DBConfig struct {
+	MongoDB MongoDBConfig `yaml:"mongodb"`
+}
+
 type SourcesConfig struct {
 	AniList    AniListConfig    `yaml:"anilist"`
 	SubsPlease SubsPleaseConfig `yaml:"subsplease"`
@@ -36,6 +45,7 @@ type SourcesConfig struct {
 
 type Config struct {
 	API     APIConfig     `yaml:"api"`
+	DB      DBConfig      `yaml:"db"`
 	Sources SourcesConfig `yaml:"sources"`
 }
 
