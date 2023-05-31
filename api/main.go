@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/troytabrilla/oshirase/api/api/conf"
 	"github.com/troytabrilla/oshirase/api/api/error"
@@ -21,5 +23,5 @@ func main() {
 		v1.AddRoutes(apiGroup.Group("/v1"), &config)
 	}
 
-	router.Run()
+	router.Run(fmt.Sprintf(":%d", config.API.Port))
 }

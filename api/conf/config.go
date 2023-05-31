@@ -23,10 +23,14 @@ type SubsPleaseRSSConfig struct {
 type SubsPleaseConfig struct {
 	RSS SubsPleaseRSSConfig `yaml:"rss"`
 }
+type APIConfig struct {
+	Port int `yaml:"port"`
+}
 
 type Config struct {
 	AniList    AniListConfig    `yaml:"anilist"`
 	SubsPlease SubsPleaseConfig `yaml:"subsplease"`
+	API        APIConfig        `yaml:"api"`
 }
 
 func LoadConfig() Config {

@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
+	"github.com/troytabrilla/oshirase/api/api/v1/sources"
 )
 
 type NotFoundError struct {
@@ -51,4 +52,16 @@ func HandleErrors(c *gin.Context) {
 			},
 		})
 	}
+}
+
+func GetStatusFromError(err error) int {
+	var status int
+	switch err := err.(type) {
+	case sources.AniListAPIError:
+		status = err.GetStatus()
+	default:
+		status = -1
+	}
+
+	return status
 }

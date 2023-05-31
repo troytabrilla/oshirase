@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/troytabrilla/oshirase/api/api/conf"
+	apierror "github.com/troytabrilla/oshirase/api/api/error"
 	"github.com/troytabrilla/oshirase/api/api/v1/models"
-	"github.com/troytabrilla/oshirase/api/api/v1/sources"
 )
 
 type MangaEntry struct{}
@@ -44,17 +44,7 @@ func (list *MangaList) GET(context *gin.Context) {
 
 	result, err := anilist.FetchList(userId, "MANGA", status)
 	if err != nil {
-		context.Error(err)
-
-		var status int
-		switch err := err.(type) {
-		case sources.AniListAPIError:
-			status = err.GetStatus()
-		default:
-			status = -1
-		}
-
-		context.AbortWithError(status, err)
+		context.AbortWithError(apierror.GetStatusFromError(err), err)
 		return
 	}
 

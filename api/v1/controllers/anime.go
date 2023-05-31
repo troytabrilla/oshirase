@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/troytabrilla/oshirase/api/api/conf"
+	apierror "github.com/troytabrilla/oshirase/api/api/error"
 	"github.com/troytabrilla/oshirase/api/api/v1/models"
-	"github.com/troytabrilla/oshirase/api/api/v1/sources"
 )
 
 type AnimeEntry struct{}
@@ -44,17 +44,7 @@ func (list *AnimeList) GET(context *gin.Context) {
 
 	result, err := anilist.FetchList(userId, "ANIME", status)
 	if err != nil {
-		context.Error(err)
-
-		var status int
-		switch err := err.(type) {
-		case sources.AniListAPIError:
-			status = err.GetStatus()
-		default:
-			status = -1
-		}
-
-		context.AbortWithError(status, err)
+		context.AbortWithError(apierror.GetStatusFromError(err), err)
 		return
 	}
 
@@ -64,14 +54,62 @@ func (list *AnimeList) GET(context *gin.Context) {
 	})
 }
 
-type AnimeSchedule struct{}
+type AnimeSchedule struct {
+	Config *conf.Config
+}
 
-// TODO Implement
 func (schedule *AnimeSchedule) GET(context *gin.Context) {
+	anilist := models.AniList{Config: schedule.Config}
+	subsplease := models.SubsPlease{Config: schedule.Config}
+
+	userId := schedule.Config.AniList.API.UserID
+	status := []string{"CURRENT"}
+
+	anilist_ch := make(chan []models.FlatMedia)
+	subsplease_ch := make(chan map[string]models.SubsPleaseLatest)
+	err_ch := make(chan error)
+
+	go func() {
+		result, err := anilist.FetchList(userId, "ANIME", status)
+		if err != nil {
+			err_ch <- err
+			return
+		}
+
+		anilist_ch <- result
+	}()
+
+	go func() {
+		result, err := subsplease.FetchLatest()
+		if err != nil {
+			err_ch <- err
+			return
+		}
+
+		subsplease_ch <- result
+	}()
+
+	var list []models.FlatMedia
+	var latest map[string]models.SubsPleaseLatest
+
+	for i := 0; i < 2; i++ {
+		select {
+		case list = <-anilist_ch:
+		case latest = <-subsplease_ch:
+		case err := <-err_ch:
+			context.AbortWithError(apierror.GetStatusFromError(err), err)
+			return
+		}
+	}
+
+	// TODO Fetch alt titles
+	// TODO Fetch schedule
+	// TODO Aggregate results (simulate microservice for exp)
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
-			"message": "Anime Schedule",
+			"list":   list,
+			"latest": latest,
 		},
 	})
 }

@@ -8,18 +8,19 @@ import (
 
 var AnimeList controllers.AnimeList
 var MangaList controllers.MangaList
-var Schedule = controllers.AnimeSchedule{}
+var AnimeSchedule controllers.AnimeSchedule
 var AnimeEntry = controllers.AnimeEntry{}
 var MangaEntry = controllers.MangaEntry{}
 
 func AddRoutes(group *gin.RouterGroup, config *conf.Config) {
 	AnimeList = controllers.AnimeList{Config: config}
+	AnimeSchedule = controllers.AnimeSchedule{Config: config}
 	MangaList = controllers.MangaList{Config: config}
 
 	animeGroup := group.Group("/anime")
 	{
 		animeGroup.GET("", AnimeList.GET)
-		animeGroup.GET("/schedule", Schedule.GET)
+		animeGroup.GET("/schedule", AnimeSchedule.GET)
 		idGroup := animeGroup.Group("/:id")
 		{
 
