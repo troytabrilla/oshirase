@@ -91,7 +91,7 @@ type AniList struct {
 	Config *conf.Config
 }
 
-func (anilist AniList) FetchList(userId int, mediaType string, status []string) ([]FlatMedia, error) {
+func (anilist *AniList) FetchList(userId int, mediaType string, status []string) ([]FlatMedia, error) {
 	api := sources.AniListAPI{Config: anilist.Config}
 
 	body, err := api.Fetch(userId, mediaType, status)

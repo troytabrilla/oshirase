@@ -53,7 +53,7 @@ type AniListAPI struct {
 	Config *conf.Config
 }
 
-func (api AniListAPI) Fetch(userId int, mediaType string, status []string) ([]byte, error) {
+func (api *AniListAPI) Fetch(userId int, mediaType string, status []string) ([]byte, error) {
 	query, err := os.ReadFile("../graphql/anilist/list_query.graphql")
 	if err != nil {
 		return []byte{}, err

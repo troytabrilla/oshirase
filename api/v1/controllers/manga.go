@@ -13,7 +13,7 @@ import (
 type MangaEntry struct{}
 
 // TODO Implement
-func (entry MangaEntry) GET(c *gin.Context) {
+func (entry *MangaEntry) GET(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -24,7 +24,7 @@ func (entry MangaEntry) GET(c *gin.Context) {
 
 // TODO Implement
 // TODO Authenticate
-func (entry MangaEntry) PUT(c *gin.Context) {
+func (entry *MangaEntry) PUT(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -37,7 +37,7 @@ type MangaList struct {
 	Config *conf.Config
 }
 
-func (list MangaList) GET(context *gin.Context) {
+func (list *MangaList) GET(context *gin.Context) {
 	anilist := models.AniList{Config: list.Config}
 	userId := list.Config.AniList.API.UserID
 	status := []string{}

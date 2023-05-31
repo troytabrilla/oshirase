@@ -13,7 +13,7 @@ import (
 type AnimeEntry struct{}
 
 // TODO Implement
-func (entry AnimeEntry) GET(context *gin.Context) {
+func (entry *AnimeEntry) GET(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -24,7 +24,7 @@ func (entry AnimeEntry) GET(context *gin.Context) {
 
 // TODO Implement
 // TODO Authenticate
-func (entry AnimeEntry) PUT(context *gin.Context) {
+func (entry *AnimeEntry) PUT(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -37,7 +37,7 @@ type AnimeList struct {
 	Config *conf.Config
 }
 
-func (list AnimeList) GET(context *gin.Context) {
+func (list *AnimeList) GET(context *gin.Context) {
 	anilist := models.AniList{Config: list.Config}
 	userId := list.Config.AniList.API.UserID
 	status := []string{}
@@ -67,7 +67,7 @@ func (list AnimeList) GET(context *gin.Context) {
 type AnimeSchedule struct{}
 
 // TODO Implement
-func (schedule AnimeSchedule) GET(context *gin.Context) {
+func (schedule *AnimeSchedule) GET(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{

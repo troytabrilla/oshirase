@@ -8,6 +8,6 @@ type MangaDexAPI struct {
 	Config *conf.Config
 }
 
-func (api MangaDexAPI) FetchLatest([]byte, error) {
+func (api *MangaDexAPI) FetchLatest([]byte, error) {
 	// TODO Implement
 }

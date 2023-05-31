@@ -17,8 +17,16 @@ type AniListConfig struct {
 	API AniListAPIConfig `yaml:"api"`
 }
 
+type SubsPleaseRSSConfig struct {
+	URL string `yaml:"url"`
+}
+type SubsPleaseConfig struct {
+	RSS SubsPleaseRSSConfig `yaml:"rss"`
+}
+
 type Config struct {
-	AniList AniListConfig `yaml:"anilist"`
+	AniList    AniListConfig    `yaml:"anilist"`
+	SubsPlease SubsPleaseConfig `yaml:"subsplease"`
 }
 
 func LoadConfig() Config {
