@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/troytabrilla/oshirase/api/api/conf"
-	"github.com/troytabrilla/oshirase/api/api/v1/sources"
+	"github.com/troytabrilla/oshirase/api/api/sources"
 )
 
 type Title struct {

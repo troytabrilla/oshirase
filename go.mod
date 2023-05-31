@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/gin-gonic/gin v1.9.0
+	go.mongodb.org/mongo-driver v1.11.6
 	gopkg.in/yaml.v3 v3.0.1
 )
 

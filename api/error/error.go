@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/gin-gonic/gin"
-	"github.com/troytabrilla/oshirase/api/api/v1/sources"
+	"github.com/troytabrilla/oshirase/api/api/sources"
 )
 
 type NotFoundError struct {
