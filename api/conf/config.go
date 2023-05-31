@@ -7,6 +7,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type APIConfig struct {
+	Port int `yaml:"port"`
+}
+
 type AniListAPIConfig struct {
 	URL string `yaml:"url"`
 	// TODO Temporary, remove later.
@@ -20,17 +24,19 @@ type AniListConfig struct {
 type SubsPleaseRSSConfig struct {
 	URL string `yaml:"url"`
 }
+
 type SubsPleaseConfig struct {
 	RSS SubsPleaseRSSConfig `yaml:"rss"`
 }
-type APIConfig struct {
-	Port int `yaml:"port"`
+
+type SourcesConfig struct {
+	AniList    AniListConfig    `yaml:"anilist"`
+	SubsPlease SubsPleaseConfig `yaml:"subsplease"`
 }
 
 type Config struct {
-	AniList    AniListConfig    `yaml:"anilist"`
-	SubsPlease SubsPleaseConfig `yaml:"subsplease"`
-	API        APIConfig        `yaml:"api"`
+	API     APIConfig     `yaml:"api"`
+	Sources SourcesConfig `yaml:"sources"`
 }
 
 func LoadConfig() Config {

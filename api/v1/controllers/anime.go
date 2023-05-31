@@ -39,7 +39,7 @@ type AnimeList struct {
 
 func (list *AnimeList) GET(context *gin.Context) {
 	anilist := models.AniList{Config: list.Config}
-	userId := list.Config.AniList.API.UserID
+	userId := list.Config.Sources.AniList.API.UserID
 	status := []string{}
 
 	result, err := anilist.FetchList(userId, "ANIME", status)
@@ -62,7 +62,7 @@ func (schedule *AnimeSchedule) GET(context *gin.Context) {
 	anilist := models.AniList{Config: schedule.Config}
 	subsplease := models.SubsPlease{Config: schedule.Config}
 
-	userId := schedule.Config.AniList.API.UserID
+	userId := schedule.Config.Sources.AniList.API.UserID
 	status := []string{"CURRENT"}
 
 	anilist_ch := make(chan []models.FlatMedia)

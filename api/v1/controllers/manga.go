@@ -39,7 +39,7 @@ type MangaList struct {
 
 func (list *MangaList) GET(context *gin.Context) {
 	anilist := models.AniList{Config: list.Config}
-	userId := list.Config.AniList.API.UserID
+	userId := list.Config.Sources.AniList.API.UserID
 	status := []string{}
 
 	result, err := anilist.FetchList(userId, "MANGA", status)

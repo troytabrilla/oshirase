@@ -12,7 +12,7 @@ type SubsPleaseSite struct {
 }
 
 func (site *SubsPleaseSite) FetchLatest() ([]byte, error) {
-	res, err := http.Get(site.Config.SubsPlease.RSS.URL)
+	res, err := http.Get(site.Config.Sources.SubsPlease.RSS.URL)
 	if err != nil {
 		return []byte{}, err
 	}

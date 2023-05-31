@@ -22,7 +22,7 @@ func TestAnimeListDefault(test *testing.T) {
 	config := conf.LoadConfig()
 	anilist := AniList{Config: &config}
 
-	res, err := anilist.FetchList(config.AniList.API.UserID, "ANIME", []string{})
+	res, err := anilist.FetchList(config.Sources.AniList.API.UserID, "ANIME", []string{})
 	if len(res) == 0 || err != nil {
 		test.Fatalf(`FetchList should return a non-empty anime list for the default user.`)
 	}
@@ -32,7 +32,7 @@ func TestMangaListDefault(test *testing.T) {
 	config := conf.LoadConfig()
 	anilist := AniList{Config: &config}
 
-	res, err := anilist.FetchList(config.AniList.API.UserID, "MANGA", []string{})
+	res, err := anilist.FetchList(config.Sources.AniList.API.UserID, "MANGA", []string{})
 	if len(res) == 0 || err != nil {
 		test.Fatalf(`FetchList should return a non-empty manga list for the default user.`)
 	}
