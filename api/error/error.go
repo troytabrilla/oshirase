@@ -17,6 +17,27 @@ func (n NotFoundError) Error() string {
 	return fmt.Sprintf("Could not find %s %s", n.MediaType, n.Message)
 }
 
+func UnwrapError(err error) error {
+	switch err := err.(type) {
+	case *gin.Error:
+		return err.Unwrap()
+	default:
+		return err
+	}
+}
+
+func GetStatusFromError(err error) int {
+	var status int
+	switch err := UnwrapError(err).(type) {
+	case sources.AniListAPIError:
+		status = err.GetStatus()
+	default:
+		status = 500
+	}
+
+	return status
+}
+
 func HandleErrors(c *gin.Context) {
 	c.Next()
 
@@ -29,39 +50,18 @@ func HandleErrors(c *gin.Context) {
 		return
 	}
 
-	switch c.Writer.Status() {
-	case 400:
-		c.JSON(400, gin.H{
-			"status": 400,
-			"data": gin.H{
-				"message": last.Error(),
-			},
-		})
-	case 404:
-		c.JSON(404, gin.H{
-			"status": 404,
-			"data": gin.H{
-				"message": last.Error(),
-			},
-		})
-	default:
-		c.JSON(500, gin.H{
-			"status": 500,
-			"data": gin.H{
-				"message": "Whoops...",
-			},
-		})
-	}
-}
-
-func GetStatusFromError(err error) int {
-	var status int
-	switch err := err.(type) {
-	case sources.AniListAPIError:
-		status = err.GetStatus()
-	default:
-		status = -1
+	status := GetStatusFromError(last)
+	var message string
+	if status == 500 {
+		message = "Whoops..."
+	} else {
+		message = last.Error()
 	}
 
-	return status
+	c.JSON(status, gin.H{
+		"status": status,
+		"data": gin.H{
+			"message": message,
+		},
+	})
 }

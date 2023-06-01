@@ -65,8 +65,8 @@ type Latest struct {
 }
 
 type AltTitles struct {
-	MediaID   int
-	AltTitles []string
+	MediaID   int      `bson:"media_id"`
+	AltTitles []string `bson:"alt_titles"`
 }
 
 type FlatMedia struct {

@@ -13,7 +13,6 @@ func TestSubsPleaseFetchLatest(test *testing.T) {
 
 	latest, err := subsplease.FetchLatest()
 	if len(latest) == 0 || err != nil {
-		test.Fatalf(`FetchLatest should return a non-empty map of latst anime.`)
+		test.Fatalf("FetchLatest should return a non-empty map of latest anime: %v, %v.", latest, err)
 	}
-
 }

@@ -11,7 +11,7 @@ var Anime controllers.Anime
 var Manga controllers.Manga
 
 func AddRoutes(group *gin.RouterGroup, config *conf.Config, client *mongo.Client) {
-	Anime = controllers.Anime{Config: config}
+	Anime = controllers.Anime{Config: config, Client: client}
 	Manga = controllers.Manga{Config: config}
 
 	animeGroup := group.Group("/anime")
