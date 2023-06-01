@@ -2,4 +2,4 @@ config
 fixtures
 target
 todo
-api/api
+api/api*

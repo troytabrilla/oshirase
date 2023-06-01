@@ -8,6 +8,11 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
+type AltTitles struct {
+	MediaID   int      `bson:"media_id"`
+	AltTitles []string `bson:"alt_titles"`
+}
+
 type AltTitle struct {
 	Config *conf.Config
 	Client *mongo.Client

@@ -64,27 +64,21 @@ type Latest struct {
 	URL    string
 }
 
-type AltTitles struct {
-	MediaID   int      `bson:"media_id"`
-	AltTitles []string `bson:"alt_titles"`
-}
-
 type FlatMedia struct {
-	MediaID      int
-	MediaType    string
-	Status       string
-	Format       string
-	Season       string
-	SeasonYear   int
-	Title        string
-	EnglishTitle string
-	Image        string
-	Episodes     int
-	Score        int
-	Progress     int
-	Schedule     Schedule
-	Latest       Latest
-	AltTitles    map[string]AltTitles
+	MediaID    int
+	MediaType  string
+	Status     string
+	Format     string
+	Season     string
+	SeasonYear int
+	Title      string
+	Image      string
+	Episodes   int
+	Score      int
+	Progress   int
+	Schedule   Schedule
+	Latest     Latest
+	AltTitles  []string
 }
 
 type AniList struct {
@@ -111,18 +105,18 @@ func (anilist *AniList) FetchList(userId int, mediaType string, status []string)
 	for _, list := range lists {
 		for _, entry := range list.Entries {
 			flat := FlatMedia{
-				MediaID:      entry.Media.ID,
-				MediaType:    entry.Media.Type,
-				Status:       entry.Status,
-				Format:       entry.Media.Format,
-				Season:       entry.Media.Season,
-				SeasonYear:   entry.Media.SeasonYear,
-				Title:        entry.Media.Title.Romaji,
-				EnglishTitle: entry.Media.Title.English,
-				Image:        entry.Media.CoverImage.Large,
-				Episodes:     entry.Media.Episodes,
-				Score:        entry.Score,
-				Progress:     entry.Progress,
+				MediaID:    entry.Media.ID,
+				MediaType:  entry.Media.Type,
+				Status:     entry.Status,
+				Format:     entry.Media.Format,
+				Season:     entry.Media.Season,
+				SeasonYear: entry.Media.SeasonYear,
+				Title:      entry.Media.Title.Romaji,
+				Image:      entry.Media.CoverImage.Large,
+				Episodes:   entry.Media.Episodes,
+				Score:      entry.Score,
+				Progress:   entry.Progress,
+				AltTitles:  []string{entry.Media.Title.English},
 			}
 			flattened = append(flattened, flat)
 		}
