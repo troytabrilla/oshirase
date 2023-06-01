@@ -10,10 +10,12 @@ import (
 	"github.com/troytabrilla/oshirase/api/api/v1/models"
 )
 
-type MangaEntry struct{}
+type Manga struct {
+	Config *conf.Config
+}
 
 // TODO Implement
-func (entry *MangaEntry) GET(c *gin.Context) {
+func (manga *Manga) GetEntry(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -24,7 +26,7 @@ func (entry *MangaEntry) GET(c *gin.Context) {
 
 // TODO Implement
 // TODO Authenticate
-func (entry *MangaEntry) PUT(c *gin.Context) {
+func (manga *Manga) PutEntry(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -33,13 +35,9 @@ func (entry *MangaEntry) PUT(c *gin.Context) {
 	})
 }
 
-type MangaList struct {
-	Config *conf.Config
-}
-
-func (list *MangaList) GET(context *gin.Context) {
-	anilist := models.AniList{Config: list.Config}
-	userId := list.Config.Sources.AniList.API.UserID
+func (manga *Manga) GetList(context *gin.Context) {
+	anilist := models.AniList{Config: manga.Config}
+	userId := manga.Config.Sources.AniList.API.UserID
 	status := []string{}
 
 	result, err := anilist.FetchList(userId, "MANGA", status)

@@ -7,38 +7,34 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-var AnimeList controllers.AnimeList
-var MangaList controllers.MangaList
-var AnimeSchedule controllers.AnimeSchedule
-var AnimeEntry = controllers.AnimeEntry{}
-var MangaEntry = controllers.MangaEntry{}
+var Anime controllers.Anime
+var Manga controllers.Manga
 
 func AddRoutes(group *gin.RouterGroup, config *conf.Config, client *mongo.Client) {
-	AnimeList = controllers.AnimeList{Config: config}
-	AnimeSchedule = controllers.AnimeSchedule{Config: config}
-	MangaList = controllers.MangaList{Config: config}
+	Anime = controllers.Anime{Config: config}
+	Manga = controllers.Manga{Config: config}
 
 	animeGroup := group.Group("/anime")
 	{
-		animeGroup.GET("", AnimeList.GET)
-		animeGroup.GET("/schedule", AnimeSchedule.GET)
+		animeGroup.GET("", Anime.GetList)
+		animeGroup.GET("/schedule", Anime.GetSchedule)
 		idGroup := animeGroup.Group("/:id")
 		{
 
 			idGroup.Use(controllers.LoadMediaByID("anime"))
-			idGroup.GET("", AnimeEntry.GET)
-			idGroup.PUT("", AnimeEntry.PUT)
+			idGroup.GET("", Anime.GetEntry)
+			idGroup.PUT("", Anime.PutEntry)
 		}
 	}
 
 	mangaGroup := group.Group("/manga")
 	{
-		mangaGroup.GET("", MangaList.GET)
+		mangaGroup.GET("", Manga.GetList)
 		idGroup := mangaGroup.Group("/:id")
 		{
 			idGroup.Use(controllers.LoadMediaByID("manga"))
-			idGroup.GET("", MangaEntry.GET)
-			idGroup.PUT("", MangaEntry.PUT)
+			idGroup.GET("", Manga.GetEntry)
+			idGroup.PUT("", Manga.PutEntry)
 		}
 	}
 }

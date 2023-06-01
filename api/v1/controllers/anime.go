@@ -10,10 +10,12 @@ import (
 	"github.com/troytabrilla/oshirase/api/api/v1/models"
 )
 
-type AnimeEntry struct{}
+type Anime struct {
+	Config *conf.Config
+}
 
 // TODO Implement
-func (entry *AnimeEntry) GET(context *gin.Context) {
+func (anime *Anime) GetEntry(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -24,7 +26,7 @@ func (entry *AnimeEntry) GET(context *gin.Context) {
 
 // TODO Implement
 // TODO Authenticate
-func (entry *AnimeEntry) PUT(context *gin.Context) {
+func (anime *Anime) PutEntry(context *gin.Context) {
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data": gin.H{
@@ -33,13 +35,9 @@ func (entry *AnimeEntry) PUT(context *gin.Context) {
 	})
 }
 
-type AnimeList struct {
-	Config *conf.Config
-}
-
-func (list *AnimeList) GET(context *gin.Context) {
-	anilist := models.AniList{Config: list.Config}
-	userId := list.Config.Sources.AniList.API.UserID
+func (anime *Anime) GetList(context *gin.Context) {
+	anilist := models.AniList{Config: anime.Config}
+	userId := anime.Config.Sources.AniList.API.UserID
 	status := []string{}
 
 	result, err := anilist.FetchList(userId, "ANIME", status)
@@ -54,15 +52,11 @@ func (list *AnimeList) GET(context *gin.Context) {
 	})
 }
 
-type AnimeSchedule struct {
-	Config *conf.Config
-}
+func (anime *Anime) GetSchedule(context *gin.Context) {
+	anilist := models.AniList{Config: anime.Config}
+	subsplease := models.SubsPlease{Config: anime.Config}
 
-func (schedule *AnimeSchedule) GET(context *gin.Context) {
-	anilist := models.AniList{Config: schedule.Config}
-	subsplease := models.SubsPlease{Config: schedule.Config}
-
-	userId := schedule.Config.Sources.AniList.API.UserID
+	userId := anime.Config.Sources.AniList.API.UserID
 	status := []string{"CURRENT"}
 
 	anilist_ch := make(chan []models.FlatMedia)
