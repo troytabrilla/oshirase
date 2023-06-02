@@ -47,79 +47,10 @@ func (anime *Anime) GetList(context *gin.Context) {
 		return
 	}
 
+	// TODO Fetch list, alt titles, schedule, latest simultaneously
+	// TODO Aggregate results
 	context.JSON(http.StatusOK, gin.H{
 		"status": 200,
 		"data":   result,
-	})
-}
-
-func (anime *Anime) GetSchedule(context *gin.Context) {
-	anilist := models.AniList{Config: anime.Config}
-	subsplease := models.SubsPlease{Config: anime.Config}
-	alt_title := models.AltTitle{Config: anime.Config, Client: anime.Client}
-
-	userId := anime.Config.Sources.AniList.API.UserID
-	status := []string{"CURRENT"}
-
-	anilist_ch := make(chan []models.FlatMedia)
-	subsplease_ch := make(chan map[string]models.SubsPleaseLatest)
-	alt_title_ch := make(chan map[int]models.AltTitles)
-	err_ch := make(chan error)
-
-	go func() {
-		result, err := anilist.FetchList(userId, "ANIME", status)
-		if err != nil {
-			err_ch <- err
-			return
-		}
-
-		anilist_ch <- result
-	}()
-
-	go func() {
-		result, err := subsplease.FetchLatest()
-		if err != nil {
-			err_ch <- err
-			return
-		}
-
-		subsplease_ch <- result
-	}()
-
-	go func() {
-		result, err := alt_title.FetchAltTitles()
-		if err != nil {
-			err_ch <- err
-			return
-		}
-
-		alt_title_ch <- result
-	}()
-
-	var list []models.FlatMedia
-	var latest map[string]models.SubsPleaseLatest
-	var alt_titles map[int]models.AltTitles
-	var err error
-
-	for i := 0; i < 3; i++ {
-		select {
-		case list = <-anilist_ch:
-		case latest = <-subsplease_ch:
-		case alt_titles = <-alt_title_ch:
-		case err = <-err_ch:
-			context.Error(err)
-			return
-		}
-	}
-
-	// TODO Fetch schedule
-	// TODO Aggregate results (simulate microservice for exp)
-	context.JSON(http.StatusOK, gin.H{
-		"status": 200,
-		"data": gin.H{
-			"list":       list,
-			"latest":     latest,
-			"alt_titles": alt_titles,
-		},
 	})
 }

@@ -26,11 +26,14 @@ func UnwrapError(err error) error {
 	}
 }
 
+// TODO Use interface for errors with status codes?
 func GetStatusFromError(err error) int {
 	var status int
 	switch err := UnwrapError(err).(type) {
 	case sources.AniListAPIError:
 		status = err.GetStatus()
+	case NotFoundError:
+		status = 404
 	default:
 		status = 500
 	}

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	apierror "github.com/troytabrilla/oshirase/api/api/error"
 )
 
 func LoadMediaByID(mediaType string) func(*gin.Context) {
@@ -12,7 +13,10 @@ func LoadMediaByID(mediaType string) func(*gin.Context) {
 		idParam := context.Param("id")
 		id, err := strconv.Atoi(idParam)
 		if err != nil {
-			context.Error(err)
+			context.AbortWithError(404, apierror.NotFoundError{
+				MediaType: mediaType,
+				Message:   idParam,
+			})
 			return
 		}
 

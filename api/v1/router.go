@@ -9,15 +9,16 @@ import (
 
 var Anime controllers.Anime
 var Manga controllers.Manga
+var Internal controllers.Internal
 
 func AddRoutes(group *gin.RouterGroup, config *conf.Config, client *mongo.Client) {
 	Anime = controllers.Anime{Config: config, Client: client}
 	Manga = controllers.Manga{Config: config}
+	Internal = controllers.Internal{Config: config, Client: client}
 
 	animeGroup := group.Group("/anime")
 	{
 		animeGroup.GET("", Anime.GetList)
-		animeGroup.GET("/schedule", Anime.GetSchedule)
 		idGroup := animeGroup.Group("/:id")
 		{
 
@@ -36,5 +37,13 @@ func AddRoutes(group *gin.RouterGroup, config *conf.Config, client *mongo.Client
 			idGroup.GET("", Manga.GetEntry)
 			idGroup.PUT("", Manga.PutEntry)
 		}
+	}
+
+	internalGroup := group.Group("/internal")
+	{
+		internalGroup.GET("/alt_titles", Internal.GetAltTitles)
+		internalGroup.GET("/current", Internal.GetCurrent)
+		internalGroup.GET("/latest", Internal.GetLatest)
+		internalGroup.GET("/schedule", Internal.GetSchedule)
 	}
 }
